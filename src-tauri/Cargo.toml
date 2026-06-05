@@ -1,0 +1,44 @@
+[package]
+name = "clipflow"
+version = "0.1.0"
+description = "Clipboard Manager for macOS"
+authors = ["gustavonoll"]
+edition = "2021"
+
+[lib]
+name = "clipflow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+arboard = "3"
+sha2 = "0.10"
+hex = "0.4"
+regex = "1"
+base64 = "0.22"
+thiserror = "2"
+parking_lot = "0.12"
+dirs = "6"
+png = "0.17"
+window-vibrancy = "0.6"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSColor", "NSResponder", "NSWorkspace", "NSRunningApplication", "NSEvent"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"

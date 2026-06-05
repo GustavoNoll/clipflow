@@ -1,0 +1,332 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+:root,
+[data-theme="light"] {
+  --color-bg: #f4f4f6;
+  --color-sidebar: #ebebed;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f8f8fa;
+  --color-surface-raised: #ffffff;
+  --color-border: #dcdce2;
+  --color-border-subtle: #ececf0;
+  --color-text: #18181b;
+  --color-text-secondary: #3f3f46;
+  --color-text-muted: #71717a;
+  --color-accent: #5b5fc7;
+  --color-accent-hover: #4f53b8;
+  --color-accent-muted: #5b5fc71a;
+  --color-accent-subtle: #5b5fc70f;
+  --color-danger: #dc2626;
+  --color-danger-subtle: #dc262614;
+  --color-success: #16a34a;
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.12);
+}
+
+[data-theme="dark"] {
+  --color-bg: #111114;
+  --color-sidebar: #0c0c0f;
+  --color-surface: #18181c;
+  --color-surface-hover: #1f1f24;
+  --color-surface-raised: #222228;
+  --color-border: #2a2a32;
+  --color-border-subtle: #1e1e24;
+  --color-text: #ececef;
+  --color-text-secondary: #b4b4bc;
+  --color-text-muted: #8b8b96;
+  --color-accent: #5b5fc7;
+  --color-accent-hover: #6d71d4;
+  --color-accent-muted: #5b5fc722;
+  --color-accent-subtle: #5b5fc714;
+  --color-danger: #e5484d;
+  --color-danger-subtle: #e5484d18;
+  --color-success: #30b05a;
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--color-accent-muted);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+html.notch-shelf,
+html.notch-shelf body,
+html.notch-shelf #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+html.notch-shelf .notch-root {
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+
+.notch-trigger {
+  -webkit-app-region: no-drag;
+}
+
+html.notch-shelf-dark {
+  color-scheme: dark;
+}
+
+html.notch-shelf-dark .notch-pill {
+  box-shadow: none;
+  filter: none;
+  will-change: width, background-color;
+}
+
+.notch-expanded-panel {
+  animation: notch-panel-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top center;
+  will-change: transform, opacity, clip-path;
+}
+
+.notch-rail-enter,
+.notch-search-enter,
+.notch-categories-enter,
+.notch-groups-enter {
+  animation: notch-content-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.notch-rail-enter {
+  animation-delay: 300ms;
+}
+
+.notch-search-enter {
+  animation-delay: 360ms;
+}
+
+.notch-categories-enter {
+  animation-delay: 430ms;
+}
+
+.notch-groups-enter {
+  animation-delay: 505ms;
+}
+
+.notch-item-card {
+  animation: notch-item-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes notch-panel-enter {
+  from {
+    opacity: 1;
+    transform: translateY(-1px) scaleX(0.18) scaleY(0.18);
+    clip-path: inset(0 0 0 0 round 0 0 20px 20px);
+  }
+  62% {
+    transform: translateY(0) scaleX(0.92) scaleY(0.88);
+    clip-path: inset(0 0 0 0 round 0 0 22px 22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleX(1) scaleY(1);
+    clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+  }
+}
+
+@keyframes notch-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.992);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes notch-item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+html.notch-shelf-dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.14);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: background 150ms ease, color 150ms ease;
+  &:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: var(--color-accent);
+  color: white;
+  transition: filter 150ms ease;
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+@utility input-field {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+  &:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-subtle);
+  }
+}
+
+@utility panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+@utility text-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+@utility text-section {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+html.notch-shelf,
+html.notch-shelf body,
+html.notch-shelf #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+html.notch-shelf .notch-root {
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+
+.notch-trigger {
+  -webkit-app-region: no-drag;
+}
+
+html.notch-shelf-dark {
+  color-scheme: dark;
+}
+
+html.notch-shelf-dark .notch-pill {
+  box-shadow: none;
+  filter: none;
+  will-change: width, background-color;
+}
+
+html.notch-shelf-dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.14);
+}

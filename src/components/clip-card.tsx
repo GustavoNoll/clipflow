@@ -1,0 +1,195 @@
+import { useState } from "react";
+import { AppIcon } from "./app-icon";
+import {
+  copyItemToClipboard,
+  formatRelativeTime,
+  itemTypeLabel,
+} from "../lib/api";
+import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
+import { privacyPreview } from "../lib/privacy";
+import { useSettings } from "../lib/settings-context";
+import { smartActionsForItem } from "../lib/smart-actions";
+import type { ClipboardItem } from "../lib/types";
+import { cn } from "../lib/utils";
+import { Star, Trash2 } from "lucide-react";
+import { ContextMenu, type ContextMenuAction } from "./context-menu";
+
+interface ClipCardProps {
+  item: ClipboardItem;
+  selected?: boolean;
+  onFavorite?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onPaste?: (id: string) => void;
+  onCopy?: (id: string) => void;
+  onIgnoreApp?: (appName: string) => void;
+}
+
+export function ClipCard({
+  item,
+  selected,
+  onFavorite,
+  onDelete,
+  onPaste,
+  onCopy,
+  onIgnoreApp,
+}: ClipCardProps) {
+  const { settings } = useSettings();
+  const isColor = item.itemType === "color";
+  const colorValue = isColor ? item.content.trim() : undefined;
+  const appLabel = getSourceAppLabel(item);
+  const sizeLabel = getItemSizeLabel(item);
+  const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const contextItems: ContextMenuAction[] = [
+    {
+      id: "paste",
+      label: "Paste",
+      onSelect: () => onPaste?.(item.id),
+    },
+    {
+      id: "copy",
+      label: "Copy to Clipboard",
+      onSelect: () => {
+        void copyItemToClipboard(
+          item.id,
+          `Copied ${itemTypeLabel(item.itemType).toLowerCase()}`,
+        );
+      },
+    },
+    ...smartActionsForItem(item).map((action) => ({
+      id: action.id,
+      label: action.label,
+      onSelect: () => {
+        void action.run();
+      },
+    })),
+    {
+      id: "favorite",
+      label: item.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+      onSelect: () => onFavorite?.(item.id),
+    },
+    ...(item.sourceApp
+      ? [
+          {
+            id: "ignore-app",
+            label: `Ignore ${item.sourceApp}`,
+            onSelect: () => onIgnoreApp?.(item.sourceApp!),
+          },
+        ]
+      : []),
+    {
+      id: "delete",
+      label: "Delete",
+      destructive: true,
+      onSelect: () => onDelete?.(item.id),
+    },
+  ];
+
+  return (
+    <>
+    <article
+      className={cn(
+        "group panel flex flex-col p-3.5 transition-colors hover:bg-[var(--color-surface-hover)]",
+        selected && "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]",
+      )}
+      onClick={() => onCopy?.(item.id)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      <div className="mb-2.5 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <AppIcon appName={item.sourceApp} size="md" title={appLabel} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-[var(--color-text-secondary)]">
+              {appLabel}
+              <span className="text-[var(--color-text-muted)]"> · {itemTypeLabel(item.itemType)}</span>
+            </p>
+            <p className="truncate text-[11px] text-[var(--color-text-muted)]">
+              {formatRelativeTime(item.createdAt)} · {sizeLabel}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            className={cn(
+              "rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)]",
+              item.isFavorite && "text-amber-500 opacity-100",
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onFavorite?.(item.id);
+            }}
+            aria-label="Toggle favorite"
+          >
+            <Star size={14} fill={item.isFavorite ? "currentColor" : "none"} />
+          </button>
+          <button
+            type="button"
+            className="rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.(item.id);
+            }}
+            aria-label="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+
+      {item.itemType === "image" && item.thumbnail ? (
+        <div className="mb-2.5 overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-bg)]">
+          <img
+            src={item.thumbnail}
+            alt="Clipboard image"
+            className="h-28 w-full object-cover"
+          />
+        </div>
+      ) : isColor && colorValue ? (
+        <div className="mb-2.5 flex items-center gap-2.5">
+          <div
+            className="h-10 w-10 rounded-[var(--radius-md)] border border-[var(--color-border)]"
+            style={{ backgroundColor: colorValue }}
+          />
+          <code className="font-mono text-xs text-[var(--color-text-secondary)]">
+            {colorValue}
+          </code>
+        </div>
+      ) : (
+        <p
+          className={cn(
+            "mb-2.5 line-clamp-4 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[var(--color-text-secondary)]",
+            item.itemType === "code" && "font-mono text-[12px] text-[var(--color-success)]",
+            item.itemType === "url" && "text-[var(--color-accent)]",
+          )}
+        >
+          {preview}
+        </p>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--color-border-subtle)] pt-2.5">
+        <span className="truncate rounded-full bg-[var(--color-accent-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
+          {item.categoryName}
+        </span>
+        {item.fileName && (
+          <span className="truncate text-[11px] text-[var(--color-text-muted)]">
+            {item.fileName}
+          </span>
+        )}
+      </div>
+    </article>
+    {menu && (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        items={contextItems}
+        onClose={() => setMenu(null)}
+      />
+    )}
+    </>
+  );
+}

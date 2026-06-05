@@ -1,0 +1,96 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ClipFlow",
+  "version": "0.1.0",
+  "identifier": "com.gustavonoll.clipflow",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "ClipFlow",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "visible": false,
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      },
+      {
+        "label": "notch-shelf",
+        "title": "ClipFlow Shelf",
+        "url": "/notch-shelf",
+        "width": 220,
+        "height": 32,
+        "center": false,
+        "x": 0,
+        "y": 0,
+        "visible": false,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "transparent": true,
+        "shadow": false
+      },
+      {
+        "label": "quick-paste",
+        "title": "Quick Paste",
+        "url": "/quick-paste",
+        "width": 680,
+        "height": 520,
+        "center": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "externalBin": [
+      "bin/app-icon-helper",
+      "bin/notch-layout-helper",
+      "bin/ocr-helper",
+      "bin/auth-helper"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "14.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE1NjRFOTMwMDM2RUIwMjEKUldRaHNHNERNT2xrcFR2NFlwd3RMVnVzKzBzVmJNbTR6ZE11NlJLUDZIcDBVRW02VTRLUFA3dTQK",
+      "endpoints": [
+        "https://github.com/gustavonoll/clipflow/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

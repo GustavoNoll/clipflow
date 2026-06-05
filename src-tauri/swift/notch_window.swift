@@ -1,0 +1,88 @@
+import AppKit
+import Foundation
+import ObjectiveC
+import QuartzCore
+
+/// Allows positioning flush with the top edge (inside the physical notch).
+@objc(ClipFlowNotchWindow)
+final class ClipFlowNotchWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
+}
+
+@_cdecl("clipflow_place_notch_window")
+public func clipflow_place_notch_window(
+    _ windowPtr: UnsafeMutableRawPointer,
+    _ x: Double,
+    _ y: Double,
+    _ width: Double,
+    _ height: Double
+) {
+    let window: NSWindow = Unmanaged<NSWindow>.fromOpaque(windowPtr).takeUnretainedValue()
+
+    if object_getClass(window) !== object_getClass(ClipFlowNotchWindow.self) {
+        object_setClass(window, ClipFlowNotchWindow.self)
+    }
+
+    window.level = .screenSaver
+    window.styleMask = [.borderless]
+    window.hasShadow = false
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.acceptsMouseMovedEvents = true
+    window.ignoresMouseEvents = false
+    window.collectionBehavior = [
+        .canJoinAllSpaces,
+        .stationary,
+        .ignoresCycle,
+        .fullScreenAuxiliary,
+    ]
+
+    let frame = NSRect(x: x, y: y, width: width, height: height)
+    let shouldAnimate =
+        window.isVisible
+        && !window.frame.isEmpty
+        && abs(window.frame.width - frame.width) + abs(window.frame.height - frame.height) > 1
+
+    if shouldAnimate {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.42
+            context.allowsImplicitAnimation = true
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.22,
+                1.0,
+                0.36,
+                1.0
+            )
+            window.animator().setFrame(frame, display: true)
+        }
+    } else {
+        window.setFrame(frame, display: true)
+    }
+
+    window.orderFrontRegardless()
+}
+
+@_cdecl("clipflow_cursor_inside_notch_window")
+public func clipflow_cursor_inside_notch_window(
+    _ windowPtr: UnsafeMutableRawPointer,
+    _ margin: Double
+) -> Bool {
+    let window: NSWindow = Unmanaged<NSWindow>.fromOpaque(windowPtr).takeUnretainedValue()
+    let frame = window.frame.insetBy(dx: -margin, dy: -margin)
+    return frame.contains(NSEvent.mouseLocation)
+}
+
+@_cdecl("clipflow_cursor_inside_rect")
+public func clipflow_cursor_inside_rect(
+    _ x: Double,
+    _ y: Double,
+    _ width: Double,
+    _ height: Double,
+    _ margin: Double
+) -> Bool {
+    let frame = NSRect(x: x, y: y, width: width, height: height)
+        .insetBy(dx: -margin, dy: -margin)
+    return frame.contains(NSEvent.mouseLocation)
+}
