@@ -313,10 +313,12 @@ fn capture_image(
     let png_bytes = image_to_png(&img);
     let content_hash = hash_content(&png_bytes);
     let preview = format!("Screenshot · {}×{}", img.width, img.height);
-    let content = match crate::ocr::extract_text_from_png(&png_bytes) {
+    let ocr_text = crate::ocr::extract_text_from_png(&png_bytes);
+    let content = match ocr_text.as_deref() {
         Some(text) => format!("{preview}\n\n{text}"),
         None => preview,
     };
+    let file_name = image_file_name(img.width, img.height, ocr_text.as_deref(), now);
 
     let db_guard = db.lock();
     let category_id = db_guard.category_id_by_name("Screenshots").ok()?;
@@ -329,11 +331,70 @@ fn capture_image(
             ItemType::Image,
             source_app,
             category_id,
-            None,
+            Some(&file_name),
             Some("image/png"),
             now,
         )
         .ok()?
+}
+
+fn image_file_name(width: usize, height: usize, ocr_text: Option<&str>, now: i64) -> String {
+    let subject = ocr_text
+        .and_then(ocr_subject)
+        .unwrap_or_else(|| format!("{width}x{height}"));
+    let timestamp = chrono::DateTime::from_timestamp(now, 0)
+        .map(|date| date.format("%Y%m%d-%H%M%S").to_string())
+        .unwrap_or_else(|| now.to_string());
+
+    format!("screenshot-{subject}-{timestamp}.png")
+}
+
+fn ocr_subject(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| line.chars().any(|char| char.is_alphanumeric()))
+        .filter_map(slugify)
+        .find(|slug| slug.len() >= 4)
+}
+
+fn slugify(input: &str) -> Option<String> {
+    let mut slug = String::new();
+    let mut last_was_separator = false;
+
+    for char in input.chars() {
+        let folded = fold_latin_char(char);
+        if folded.is_ascii_alphanumeric() {
+            slug.push(folded.to_ascii_lowercase());
+            last_was_separator = false;
+        } else if !last_was_separator && !slug.is_empty() {
+            slug.push('-');
+            last_was_separator = true;
+        }
+
+        if slug.len() >= 48 {
+            break;
+        }
+    }
+
+    let slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() {
+        None
+    } else {
+        Some(slug)
+    }
+}
+
+fn fold_latin_char(char: char) -> char {
+    match char {
+        'á' | 'à' | 'ã' | 'â' | 'ä' | 'Á' | 'À' | 'Ã' | 'Â' | 'Ä' => 'a',
+        'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+        'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
+        'ó' | 'ò' | 'õ' | 'ô' | 'ö' | 'Ó' | 'Ò' | 'Õ' | 'Ô' | 'Ö' => 'o',
+        'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+        'ç' | 'Ç' => 'c',
+        'ñ' | 'Ñ' => 'n',
+        other => other,
+    }
 }
 
 fn capture_files(
@@ -461,4 +522,39 @@ pub fn paste_item(
     let target = monitor.paste_target_app();
     platform::simulate_paste_to_target(target.as_deref());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn image_file_name_uses_first_readable_ocr_line() {
+        let name = image_file_name(
+            2166,
+            1448,
+            Some("Código/arquitetura\nOutra linha"),
+            1_779_869_520,
+        );
+
+        assert_eq!(
+            name,
+            "screenshot-codigo-arquitetura-20260527-081200.png"
+        );
+    }
+
+    #[test]
+    fn image_file_name_falls_back_to_dimensions_without_ocr() {
+        let name = image_file_name(1280, 720, None, 1_779_869_520);
+
+        assert_eq!(name, "screenshot-1280x720-20260527-081200.png");
+    }
+
+    #[test]
+    fn slugify_keeps_urls_readable() {
+        assert_eq!(
+            slugify("https://buyclipflow.vercel.app/").as_deref(),
+            Some("https-buyclipflow-vercel-app")
+        );
+    }
 }

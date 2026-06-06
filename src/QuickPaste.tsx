@@ -114,10 +114,10 @@ export default function QuickPaste() {
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-[#f5f5f7] shadow-[0_24px_70px_rgba(0,0,0,0.22)]">
       <ClipboardFeedback variant="light" position="bottom" compact />
-      <div className="border-b border-black/[0.06] bg-white/92 px-4 pb-3 pt-4">
+      <div className="border-b border-black/[0.055] bg-white/94 px-4 pb-3 pt-4">
         <div className="flex items-center gap-3">
           <AppLogo size="sm" />
-          <div className="relative flex-1 rounded-[18px] border border-black/[0.08] bg-[#f7f7f9] shadow-inner transition-all focus-within:border-[var(--color-accent)] focus-within:bg-white focus-within:ring-4 focus-within:ring-[var(--color-accent-subtle)]">
+          <div className="quick-paste-search relative flex-1 rounded-[18px] border border-black/[0.07] bg-[#f8f8fa] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] transition-[border-color,background-color,box-shadow] duration-200 ease-out focus-within:border-[#7477dc]/55 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(91,95,199,0.10),inset_0_1px_0_rgba(255,255,255,0.95)]">
             <Search
               size={18}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
@@ -128,7 +128,7 @@ export default function QuickPaste() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search clipboard…"
-              className="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-[15px] font-medium tracking-tight text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:outline-none"
+              className="quick-paste-search-input h-12 w-full appearance-none border-0 bg-transparent pl-11 pr-4 text-[15px] font-medium tracking-tight text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:outline-none"
             />
           </div>
         </div>
