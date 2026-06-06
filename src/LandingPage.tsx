@@ -809,61 +809,18 @@ function ScreenshotPreview() {
 
 function UsageClip() {
   return (
-    <div className="usage-clip relative min-h-[360px] overflow-hidden rounded-[18px] bg-[#ececf4] p-4 text-[#111114]">
-      <div className="flex items-center justify-between rounded-t-[12px] bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        </div>
-        <span className="text-[12px] font-semibold text-[#7a7a84]">
-          Working in Arc
-        </span>
+    <div className="usage-clip relative overflow-hidden rounded-[18px] bg-[#050506] p-2 ring-1 ring-white/10">
+      <img
+        src="/assets/clipflow-notch-demo.gif"
+        alt="ClipFlow notch hover showing recent clipboard items on macOS"
+        className="block w-full rounded-[14px]"
+        loading="lazy"
+      />
+      <div className="pointer-events-none absolute inset-x-2 bottom-2 rounded-b-[14px] bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-16">
+        <p className="text-[12px] font-semibold text-white/72">
+          Real ClipFlow notch hover recorded on macOS
+        </p>
       </div>
-      <div className="grid min-h-[300px] grid-cols-[170px_1fr] overflow-hidden rounded-b-[12px] bg-white">
-        <aside className="space-y-3 border-r border-[#ececf1] p-4">
-          <span className="block h-8 rounded-[9px] bg-[#111114]" />
-          <span className="block h-8 rounded-[9px] bg-[#f0f0f4]" />
-          <span className="block h-8 rounded-[9px] bg-[#f0f0f4]" />
-          <span className="block h-8 rounded-[9px] bg-[#f0f0f4]" />
-        </aside>
-        <div className="relative p-5">
-          <div className="mb-4 h-10 rounded-full bg-[#f2f2f5]" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="h-28 rounded-[14px] bg-[#dfe1ff]" />
-            <div className="h-28 rounded-[14px] bg-[#111114]" />
-            <div className="h-28 rounded-[14px] bg-[#f0f0f4]" />
-            <div className="h-28 rounded-[14px] bg-[#f0f0f4]" />
-          </div>
-          <div className="usage-copy-badge absolute left-10 top-24 rounded-full bg-[#5b5fc7] px-4 py-2 text-[13px] font-semibold text-white">
-            Copied screenshot
-          </div>
-        </div>
-      </div>
-      <div className="usage-notch absolute left-1/2 top-3 w-[72%] -translate-x-1/2 rounded-b-[22px] bg-black p-4 pt-10 text-white">
-        <div className="absolute left-1/2 top-0 h-9 w-36 -translate-x-1/2 rounded-b-[22px] bg-black" />
-        <div className="mb-3 flex items-center gap-2 text-[12px] text-white/55">
-          <Search size={14} />
-          <span>Search screenshots</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-[12px] bg-white/[0.10] p-3">
-            <ScreenshotPreview />
-            <p className="mt-2 text-[12px] font-semibold">Shottr image</p>
-          </div>
-          <div className="rounded-[12px] bg-white/[0.10] p-3">
-            <p className="line-clamp-4 text-[12px] leading-5 text-white/70">
-              const cleanUrl = removeTrackingParams(url)
-            </p>
-          </div>
-          <div className="rounded-[12px] bg-white/[0.10] p-3">
-            <p className="line-clamp-4 text-[12px] leading-5 text-white/70">
-              Launch post draft for ClipFlow
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="usage-cursor absolute left-[62%] top-[54%] h-10 w-10 rotate-[-18deg] bg-white shadow-[0_10px_24px_rgb(0_0_0_/_0.22)] [clip-path:polygon(0_0,0_100%,28%_74%,45%_100%,58%_92%,42%_66%,78%_66%)]" />
     </div>
   );
 }

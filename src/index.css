@@ -312,36 +312,9 @@ html.notch-shelf-dark .scrollbar-thin::-webkit-scrollbar-thumb {
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.65);
 }
 
-.usage-notch {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-22px) scaleX(0.34) scaleY(0.18);
-  transform-origin: top center;
-}
-
-.usage-copy-badge {
-  opacity: 0;
-  transform: translateY(10px) scale(0.96);
-}
-
-.usage-cursor {
-  opacity: 0;
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .landing-demo {
     animation: landing-demo-enter 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .usage-copy-badge {
-    animation: usage-copy-badge 6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  }
-
-  .usage-notch {
-    animation: usage-notch-open 6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  }
-
-  .usage-cursor {
-    animation: usage-cursor 6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
   }
 }
 
@@ -356,75 +329,6 @@ html.notch-shelf-dark .scrollbar-thin::-webkit-scrollbar-thumb {
     opacity: 1;
     transform: translateY(0) scale(1);
     filter: blur(0);
-  }
-}
-
-@keyframes usage-copy-badge {
-  0%,
-  8% {
-    opacity: 0;
-    transform: translateY(10px) scale(0.96);
-  }
-
-  15%,
-  28% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  36%,
-  100% {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
-  }
-}
-
-@keyframes usage-notch-open {
-  0%,
-  30% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-22px) scaleX(0.34) scaleY(0.18);
-  }
-
-  44%,
-  82% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scaleX(1) scaleY(1);
-  }
-
-  92%,
-  100% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-12px) scaleX(0.8) scaleY(0.82);
-  }
-}
-
-@keyframes usage-cursor {
-  0%,
-  26% {
-    opacity: 0;
-    transform: translate(-120px, 95px) rotate(-18deg);
-  }
-
-  38% {
-    opacity: 1;
-    transform: translate(-20px, 18px) rotate(-18deg);
-  }
-
-  58% {
-    opacity: 1;
-    transform: translate(42px, -62px) rotate(-18deg);
-  }
-
-  78% {
-    opacity: 1;
-    transform: translate(-8px, 8px) rotate(-18deg);
-  }
-
-  90%,
-  100% {
-    opacity: 0;
-    transform: translate(-8px, 8px) rotate(-18deg);
   }
 }
 
