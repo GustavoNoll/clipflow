@@ -1,7 +1,14 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Grid3X3, Plus, Search, Star } from "lucide-react";
+import {
+  ArrowUpRight,
+  CircleArrowUp,
+  Grid3X3,
+  Plus,
+  Search,
+  Star,
+} from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import { ShelfGridCard } from "./components/shelf-grid-card";
@@ -23,11 +30,13 @@ import { getItemPeekLabel } from "./lib/item-label";
 import { groupItemsByDate } from "./lib/date-groups";
 import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
+import { useUpdateStatus } from "./lib/update-status-context";
 import type { Category, ClipboardItem } from "./lib/types";
 import { cn } from "./lib/utils";
 
 export default function NotchShelf() {
   const { settings } = useSettings();
+  const { update } = useUpdateStatus();
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -117,7 +126,7 @@ export default function NotchShelf() {
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
       .onFocusChanged(({ payload: focused }) => {
-        if (!focused && shelfOpen) {
+        if (!focused && expanded) {
           void collapse();
         }
       })
@@ -127,7 +136,7 @@ export default function NotchShelf() {
     return () => {
       unlisten?.();
     };
-  }, [settings.notchHoverEnabled, shelfOpen, collapse]);
+  }, [settings.notchHoverEnabled, expanded, collapse]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -334,6 +343,7 @@ export default function NotchShelf() {
           <NotchHoverRail
             item={peekItem}
             onOpenLibrary={handleOpenLibrary}
+            updateVersion={update?.version}
             className="notch-rail-enter"
           />
 
@@ -468,11 +478,13 @@ function NotchHoverRail({
   item,
   onOpen,
   onOpenLibrary,
+  updateVersion,
   className,
 }: {
   item: ClipboardItem | null;
   onOpen?: () => void;
   onOpenLibrary?: () => void;
+  updateVersion?: string;
   className?: string;
 }) {
   return (
@@ -501,6 +513,21 @@ function NotchHoverRail({
       </div>
       <div aria-hidden="true" />
       <div className="flex justify-end gap-1.5">
+        {updateVersion && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenLibrary?.();
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/15 transition-colors hover:bg-amber-400/25 hover:text-amber-200"
+            aria-label={`ClipFlow ${updateVersion} update available`}
+            title={`ClipFlow ${updateVersion} update available`}
+          >
+            <CircleArrowUp size={13} />
+          </button>
+        )}
         {onOpenLibrary && (
           <button
             type="button"

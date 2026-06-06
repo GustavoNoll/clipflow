@@ -1,13 +1,8 @@
-import { useState } from "react";
 import { X } from "lucide-react";
 import { authenticatePrivacyReveal, seedDemoData } from "../lib/api";
 import { ACCENT_PRESETS } from "../lib/settings";
 import { useSettings } from "../lib/settings-context";
-import {
-  checkForUpdate,
-  downloadInstallAndRelaunch,
-  type AvailableUpdate,
-} from "../lib/updater";
+import { useUpdateStatus } from "../lib/update-status-context";
 import { ShortcutsReference } from "./shortcuts-reference";
 import { cn } from "../lib/utils";
 
@@ -18,11 +13,16 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { settings, updateSettings, resetSettings } = useSettings();
-  const [update, setUpdate] = useState<AvailableUpdate | null>(null);
-  const [updateStatus, setUpdateStatus] = useState("Not checked yet");
-  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const {
+    currentVersion,
+    update,
+    status: updateStatus,
+    progress: updateProgress,
+    checking: checkingUpdate,
+    installing: installingUpdate,
+    checkNow,
+    installNow,
+  } = useUpdateStatus();
   const pauseUntilLabel = settings.capturePausedUntil
     ? new Date(settings.capturePausedUntil * 1000).toLocaleTimeString([], {
         hour: "2-digit",
@@ -64,44 +64,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     }
   }
 
-  async function handleCheckForUpdate() {
-    setCheckingUpdate(true);
-    setUpdateProgress(null);
-    setUpdateStatus("Checking for updates…");
-    try {
-      const nextUpdate = await checkForUpdate();
-      setUpdate(nextUpdate);
-      setUpdateStatus(
-        nextUpdate
-          ? `Version ${nextUpdate.version} is available`
-          : "ClipFlow is up to date",
-      );
-    } catch (error) {
-      setUpdate(null);
-      setUpdateStatus(
-        error instanceof Error ? error.message : "Could not check for updates",
-      );
-    } finally {
-      setCheckingUpdate(false);
-    }
-  }
-
-  async function handleInstallUpdate() {
-    setInstallingUpdate(true);
-    try {
-      await downloadInstallAndRelaunch((progress, label) => {
-        setUpdateProgress(progress);
-        setUpdateStatus(label);
-      });
-    } catch (error) {
-      setUpdateProgress(null);
-      setUpdateStatus(
-        error instanceof Error ? error.message : "Could not install update",
-      );
-      setInstallingUpdate(false);
-    }
-  }
-
   if (!open) return null;
 
   return (
@@ -123,7 +85,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               Settings
             </h2>
             <p className="text-label mt-0.5">
-              Personalize ClipFlow
+              ClipFlow {currentVersion ? `v${currentVersion}` : ""}
             </p>
           </div>
           <button type="button" onClick={onClose} className="btn-ghost h-8 w-8 p-0">
@@ -294,13 +256,28 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
           <Section title="Data">
             <Field label="Updates">
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3">
+              <div
+                className={cn(
+                  "rounded-[var(--radius-lg)] border bg-[var(--color-surface-raised)] p-3",
+                  update
+                    ? "border-amber-400/40 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]"
+                    : "border-[var(--color-border-subtle)]",
+                )}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--color-text)]">
-                      Automatic updates
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-[var(--color-text)]">
+                        Automatic updates
+                      </p>
+                      {update && (
+                        <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-medium text-amber-500">
+                          Update available
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                      {currentVersion ? `Current v${currentVersion}. ` : ""}
                       {updateStatus}
                     </p>
                     {update?.body && (
@@ -313,7 +290,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        void handleCheckForUpdate();
+                        void checkNow();
                       }}
                       disabled={checkingUpdate || installingUpdate}
                       className="btn-ghost border border-[var(--color-border-subtle)] disabled:opacity-50"
@@ -324,7 +301,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          void handleInstallUpdate();
+                          void installNow();
                         }}
                         disabled={installingUpdate}
                         className="btn-primary disabled:opacity-50"
@@ -381,6 +358,12 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         <footer className="border-t border-[var(--color-border-subtle)] px-5 py-4">
+          <div className="mb-3 flex items-center justify-between text-[11px] text-[var(--color-text-muted)]">
+            <span>ClipFlow {currentVersion ? `v${currentVersion}` : ""}</span>
+            <span className={update ? "font-medium text-amber-500" : ""}>
+              {update ? `v${update.version} available` : updateStatus}
+            </span>
+          </div>
           <button
             type="button"
             onClick={() => resetSettings()}

@@ -11,6 +11,7 @@ import LandingPage, {
 import NotchShelf from "./NotchShelf";
 import QuickPaste from "./QuickPaste";
 import { SettingsProvider } from "./lib/settings-context";
+import { UpdateStatusProvider } from "./lib/update-status-context";
 import "./index.css";
 
 function RootRoute() {
@@ -21,7 +22,11 @@ function RootRoute() {
 }
 
 function AppShell({ route }: { route: ReactNode }) {
-  return <SettingsProvider>{route}</SettingsProvider>;
+  return (
+    <SettingsProvider>
+      <UpdateStatusProvider>{route}</UpdateStatusProvider>
+    </SettingsProvider>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(
