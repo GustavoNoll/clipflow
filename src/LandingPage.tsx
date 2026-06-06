@@ -63,8 +63,8 @@ const features = [
   },
   {
     icon: ImageIcon,
-    title: "Screenshots with OCR",
-    body: "Captured images can become searchable text, locally on your Mac.",
+    title: "Named screenshots",
+    body: "Local OCR makes image clips searchable and gives screenshots readable names from captured text.",
   },
   {
     icon: ShieldCheck,
@@ -431,7 +431,7 @@ export default function LandingPage() {
               "Lifetime app license",
               "Current major version updates",
               "Notch shelf and quick paste",
-              "Local OCR for screenshots",
+              "Local OCR and readable screenshot names",
               "Privacy controls and ignored apps",
             ].map((item) => (
               <li key={item} className="flex items-center gap-3 text-[15px] text-[#34343d]">
@@ -543,7 +543,7 @@ export function PricingPage() {
               "Lifetime app license",
               "Current major version updates",
               "Notch shelf and quick paste",
-              "Local OCR for screenshots",
+              "Local OCR and readable screenshot names",
               "Privacy controls and ignored apps",
             ].map((item) => (
               <li key={item} className="flex items-center gap-3">
@@ -604,7 +604,7 @@ export function PrivacyPage() {
       <PolicySection title="Screenshots and OCR">
         When screenshot or image OCR is used, the app is designed to process text
         extraction locally on macOS. OCR output may be saved locally to make
-        image clips searchable.
+        image clips searchable and generate readable screenshot names.
       </PolicySection>
       <PolicySection title="Payments">
         Purchases are processed by Paddle. Paddle may collect payment, billing,
