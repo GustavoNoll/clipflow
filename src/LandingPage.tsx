@@ -20,7 +20,7 @@ const checkoutUrl =
   "https://buy.paddle.com/checkout/replace-with-clipflow-lifetime";
 const downloadUrl =
   import.meta.env.VITE_CLIPFLOW_DOWNLOAD_URL ||
-  "https://github.com/GustavoNoll/clipflow/releases/latest";
+  "https://github.com/GustavoNoll/clipflow/releases/latest/download/ClipFlow_0.1.1_aarch64.dmg";
 
 const recentClips = [
   {
