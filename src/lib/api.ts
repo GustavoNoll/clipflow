@@ -102,7 +102,19 @@ export async function listSourceApps(): Promise<SourceApp[]> {
 }
 
 export async function copyItemToClipboard(id: string, message?: string): Promise<void> {
-  await invoke("copy_item_to_clipboard", { id });
+  try {
+    await invoke("copy_item_to_clipboard", { id });
+  } catch (error) {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail:
+          typeof error === "string" && error.includes("Sensitive item locked")
+            ? "Unlock required to copy sensitive item"
+            : "Copy failed",
+      }),
+    );
+    return;
+  }
   window.dispatchEvent(
     new CustomEvent("clipflow:clipboard-feedback", {
       detail: message ?? "Copied to clipboard",
@@ -120,7 +132,18 @@ export async function copyTextToClipboard(text: string, message?: string): Promi
 }
 
 export async function pasteItemById(id: string): Promise<void> {
-  return invoke("paste_item_by_id", { id });
+  try {
+    await invoke("paste_item_by_id", { id });
+  } catch (error) {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail:
+          typeof error === "string" && error.includes("Sensitive item locked")
+            ? "Unlock required to paste sensitive item"
+            : "Paste failed",
+      }),
+    );
+  }
 }
 
 export function formatRelativeTime(iso: string): string {

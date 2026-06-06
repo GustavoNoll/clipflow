@@ -8,7 +8,9 @@ use uuid::Uuid;
 use crate::app_icon::AppIconCache;
 use crate::clipboard::hash_content;
 use crate::db::Database;
-use crate::monitor::{paste_item, restore_to_clipboard, should_open_in_browser, ClipboardMonitor};
+use crate::monitor::{
+    looks_sensitive, paste_item, restore_to_clipboard, should_open_in_browser, ClipboardMonitor,
+};
 use crate::settings::AppSettings;
 use crate::types::{Category, ClipboardItem, ItemType, PaginatedItems, SearchParams, SourceApp};
 
@@ -245,10 +247,16 @@ pub fn copy_item_to_clipboard(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    let item = {
+    let (item, hide_sensitive_content) = {
         let db = state.db.lock();
-        db.get_item(&id).map_err(|e| e.to_string())?
+        let item = db.get_item(&id).map_err(|e| e.to_string())?;
+        let hide_sensitive_content = db
+            .get_settings()
+            .map(|settings| settings.hide_sensitive_content)
+            .unwrap_or(true);
+        (item, hide_sensitive_content)
     };
+    authorize_sensitive_item(&item.content, hide_sensitive_content, "Copy sensitive clipboard item in ClipFlow.")?;
     restore_to_clipboard(&item, &state.monitor).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -262,12 +270,13 @@ pub fn copy_text_to_clipboard(state: State<'_, AppState>, text: String) -> Resul
 
 #[tauri::command]
 pub fn paste_item_by_id(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    let (item, auto_paste) = {
+    let (item, auto_paste, hide_sensitive_content) = {
         let db = state.db.lock();
         let item = db.get_item(&id).map_err(|e| e.to_string())?;
-        let auto_paste = db.get_settings().map(|s| s.auto_paste).unwrap_or(true);
-        (item, auto_paste)
+        let settings = db.get_settings().unwrap_or_default();
+        (item, settings.auto_paste, settings.hide_sensitive_content)
     };
+    authorize_sensitive_item(&item.content, hide_sensitive_content, "Paste sensitive clipboard item from ClipFlow.")?;
     if should_open_in_browser(&item) || auto_paste {
         paste_item(&item, &state.monitor).map_err(|e| e.to_string())
     } else {
@@ -277,20 +286,41 @@ pub fn paste_item_by_id(state: State<'_, AppState>, id: String) -> Result<(), St
 
 #[tauri::command]
 pub fn paste_recent_by_index(state: State<'_, AppState>, index: u8) -> Result<(), String> {
-    let (items, auto_paste) = {
+    let (items, auto_paste, hide_sensitive_content) = {
         let db = state.db.lock();
         let items = db.get_recent(10).map_err(|e| e.to_string())?;
-        let auto_paste = db.get_settings().map(|s| s.auto_paste).unwrap_or(true);
-        (items, auto_paste)
+        let settings = db.get_settings().unwrap_or_default();
+        (items, settings.auto_paste, settings.hide_sensitive_content)
     };
     let idx = index as usize;
     if idx >= items.len() {
         return Err("No item at this index".to_string());
     }
+    authorize_sensitive_item(
+        &items[idx].content,
+        hide_sensitive_content,
+        "Paste sensitive clipboard item from ClipFlow.",
+    )?;
     if should_open_in_browser(&items[idx]) || auto_paste {
         paste_item(&items[idx], &state.monitor).map_err(|e| e.to_string())
     } else {
         restore_to_clipboard(&items[idx], &state.monitor).map_err(|e| e.to_string())
+    }
+}
+
+fn authorize_sensitive_item(
+    content: &str,
+    hide_sensitive_content: bool,
+    reason: &str,
+) -> Result<(), String> {
+    if !hide_sensitive_content || !looks_sensitive(content) {
+        return Ok(());
+    }
+
+    if crate::privacy_auth::authenticate_with_reason(reason) {
+        Ok(())
+    } else {
+        Err("Sensitive item locked".to_string())
     }
 }
 

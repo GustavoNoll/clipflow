@@ -141,9 +141,14 @@ html.notch-shelf-dark .notch-pill {
 }
 
 .notch-expanded-panel {
-  animation: notch-panel-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: notch-panel-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: top center;
-  will-change: transform, opacity, clip-path;
+  will-change: transform, opacity, filter;
+}
+
+.notch-expanded-panel-exit {
+  animation: notch-panel-exit 300ms cubic-bezier(0.32, 0, 0.67, 0) both;
+  pointer-events: none;
 }
 
 .notch-rail-enter,
@@ -153,20 +158,29 @@ html.notch-shelf-dark .notch-pill {
   animation: notch-content-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.notch-expanded-panel-exit .notch-rail-enter,
+.notch-expanded-panel-exit .notch-search-enter,
+.notch-expanded-panel-exit .notch-categories-enter,
+.notch-expanded-panel-exit .notch-groups-enter,
+.notch-expanded-panel-exit .notch-item-card {
+  animation: notch-content-exit 130ms cubic-bezier(0.32, 0, 0.67, 0) both;
+  animation-delay: 0ms !important;
+}
+
 .notch-rail-enter {
-  animation-delay: 300ms;
+  animation-delay: 240ms;
 }
 
 .notch-search-enter {
-  animation-delay: 360ms;
+  animation-delay: 300ms;
 }
 
 .notch-categories-enter {
-  animation-delay: 430ms;
+  animation-delay: 370ms;
 }
 
 .notch-groups-enter {
-  animation-delay: 505ms;
+  animation-delay: 455ms;
 }
 
 .notch-item-card {
@@ -176,17 +190,35 @@ html.notch-shelf-dark .notch-pill {
 @keyframes notch-panel-enter {
   from {
     opacity: 1;
-    transform: translateY(-1px) scaleX(0.18) scaleY(0.18);
-    clip-path: inset(0 0 0 0 round 0 0 20px 20px);
+    transform: translateY(-1px) scaleX(0.985) scaleY(0.965);
+    filter: blur(1px);
   }
-  62% {
-    transform: translateY(0) scaleX(0.92) scaleY(0.88);
-    clip-path: inset(0 0 0 0 round 0 0 22px 22px);
+  55% {
+    transform: translateY(0) scaleX(1.003) scaleY(1.002);
+    filter: blur(0);
   }
   to {
     opacity: 1;
     transform: translateY(0) scaleX(1) scaleY(1);
-    clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    filter: blur(0);
+  }
+}
+
+@keyframes notch-panel-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleX(1) scaleY(1);
+    filter: blur(0);
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(0) scaleX(1) scaleY(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0.98;
+    transform: translateY(-1px) scaleX(0.997) scaleY(0.992);
+    filter: blur(0);
   }
 }
 
@@ -203,6 +235,19 @@ html.notch-shelf-dark .notch-pill {
   }
 }
 
+@keyframes notch-content-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.994);
+    filter: blur(3px);
+  }
+}
+
 @keyframes notch-item-enter {
   from {
     opacity: 0;
@@ -211,6 +256,24 @@ html.notch-shelf-dark .notch-pill {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notch-expanded-panel,
+  .notch-expanded-panel-exit,
+  .notch-rail-enter,
+  .notch-search-enter,
+  .notch-categories-enter,
+  .notch-groups-enter,
+  .notch-item-card,
+  .notch-expanded-panel-exit .notch-rail-enter,
+  .notch-expanded-panel-exit .notch-search-enter,
+  .notch-expanded-panel-exit .notch-categories-enter,
+  .notch-expanded-panel-exit .notch-groups-enter,
+  .notch-expanded-panel-exit .notch-item-card {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
   }
 }
 

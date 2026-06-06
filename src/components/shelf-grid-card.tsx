@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MoreHorizontal, Star, Trash2 } from "lucide-react";
 import { copyItemToClipboard, itemTypeLabel } from "../lib/api";
 import { ItemMetaFooter } from "./item-meta-footer";
-import { privacyPreview } from "../lib/privacy";
+import { isSensitiveContent, privacyPreview } from "../lib/privacy";
 import { useSettings } from "../lib/settings-context";
 import { smartActionsForItem } from "../lib/smart-actions";
 import type { ClipboardItem } from "../lib/types";
@@ -37,16 +37,18 @@ export function ShelfGridCard({
       : undefined);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const isSensitiveLocked =
+    settings.hideSensitiveContent && isSensitiveContent(item.preview);
 
   const contextItems: ContextMenuAction[] = [
     {
       id: "paste",
-      label: "Paste",
+      label: isSensitiveLocked ? "Unlock & Paste" : "Paste",
       onSelect: () => onPaste(item.id),
     },
     {
       id: "copy",
-      label: "Copy to Clipboard",
+      label: isSensitiveLocked ? "Unlock & Copy" : "Copy to Clipboard",
       onSelect: () => {
         void copyItemToClipboard(
           item.id,
@@ -54,13 +56,13 @@ export function ShelfGridCard({
         );
       },
     },
-    ...smartActionsForItem(item).map((action) => ({
+    ...(isSensitiveLocked ? [] : smartActionsForItem(item).map((action) => ({
       id: action.id,
       label: action.label,
       onSelect: () => {
         void action.run();
       },
-    })),
+    }))),
     {
       id: "favorite",
       label: item.isFavorite ? "Remove from Favorites" : "Add to Favorites",

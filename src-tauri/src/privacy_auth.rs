@@ -30,16 +30,13 @@ fn resolve_auth_helper() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-pub fn authenticate_reveal() -> bool {
+pub fn authenticate_with_reason(reason: &str) -> bool {
     let Some(helper) = resolve_auth_helper() else {
         return false;
     };
 
     Command::new(helper)
-        .env(
-            "CLIPFLOW_AUTH_REASON",
-            "Reveal sensitive clipboard previews in ClipFlow.",
-        )
+        .env("CLIPFLOW_AUTH_REASON", reason)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -49,6 +46,10 @@ pub fn authenticate_reveal() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn authenticate_reveal() -> bool {
+pub fn authenticate_with_reason(_reason: &str) -> bool {
     false
+}
+
+pub fn authenticate_reveal() -> bool {
+    authenticate_with_reason("Reveal sensitive clipboard previews in ClipFlow.")
 }

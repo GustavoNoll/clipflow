@@ -6,6 +6,8 @@ use tauri::{Emitter, Manager, WebviewWindow};
 
 use crate::notch_layout::{self, NotchLayout};
 
+const HOVER_EXIT_CONTENT_DELAY_MS: u64 = 90;
+
 fn expanded_size(layout: &NotchLayout) -> (f64, f64) {
     let width = (layout.screen_width * 0.64).clamp(760.0, 980.0);
     let content_height = (layout.screen_height * 0.30).clamp(280.0, 330.0);
@@ -183,8 +185,28 @@ fn apply_hover_preview(app: &tauri::AppHandle, hovered: bool) {
     };
 
     let layout = notch_layout::current_layout();
-    apply_notch_window(&win, &layout, false, hovered);
-    let _ = win.emit("notch-shelf:hover-preview", hovered);
+    if hovered {
+        apply_notch_window(&win, &layout, false, true);
+        let _ = win.emit("notch-shelf:hover-preview", true);
+    } else {
+        let _ = win.emit("notch-shelf:hover-preview", false);
+        let app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(HOVER_EXIT_CONTENT_DELAY_MS));
+            if HOVER_PREVIEW.load(Ordering::SeqCst) || is_shelf_expanded() {
+                return;
+            }
+
+            let main_app = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                let Some(win) = main_app.get_webview_window("notch-shelf") else {
+                    return;
+                };
+                let layout = notch_layout::current_layout();
+                apply_notch_window(&win, &layout, false, false);
+            });
+        });
+    }
 }
 
 fn start_collapsed_hover_monitor(app: &tauri::AppHandle) {

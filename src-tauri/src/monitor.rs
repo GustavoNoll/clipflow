@@ -249,7 +249,7 @@ fn should_skip_sensitive_content(db: &Arc<Mutex<Database>>, text: &str) -> bool 
     settings.skip_sensitive_content && looks_sensitive(text)
 }
 
-fn looks_sensitive(text: &str) -> bool {
+pub fn looks_sensitive(text: &str) -> bool {
     let lower = text.to_lowercase();
     let keyword_match = [
         "password",

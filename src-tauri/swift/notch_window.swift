@@ -46,14 +46,15 @@ public func clipflow_place_notch_window(
         && abs(window.frame.width - frame.width) + abs(window.frame.height - frame.height) > 1
 
     if shouldAnimate {
+        let isShrinking = frame.width < window.frame.width || frame.height < window.frame.height
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.42
+            context.duration = isShrinking ? 0.26 : 0.34
             context.allowsImplicitAnimation = true
             context.timingFunction = CAMediaTimingFunction(
-                controlPoints: 0.22,
-                1.0,
-                0.36,
-                1.0
+                controlPoints: isShrinking ? 0.25 : 0.22,
+                isShrinking ? 0.1 : 1.0,
+                isShrinking ? 0.25 : 0.36,
+                isShrinking ? 1.0 : 1.0
             )
             window.animator().setFrame(frame, display: true)
         }

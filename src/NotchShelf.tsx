@@ -37,9 +37,12 @@ export default function NotchShelf() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [peekItem, setPeekItem] = useState<ClipboardItem | null>(null);
   const [notchHovered, setNotchHovered] = useState(false);
+  const [hoverClosing, setHoverClosing] = useState(false);
   const [loading, setLoading] = useState(false);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shelfOpen = expanded || notchHovered;
+  const shelfVisible = shelfOpen || hoverClosing;
   const itemGroups = useMemo(() => groupItemsByDate(items), [items]);
 
   const refreshPeek = useCallback(async () => {
@@ -71,6 +74,7 @@ export default function NotchShelf() {
   const collapse = useCallback(async () => {
     setExpanded(false);
     setNotchHovered(false);
+    setHoverClosing(false);
     await setNotchExpanded(false);
     await setNotchHoverPreview(false);
     refreshPeek();
@@ -78,7 +82,7 @@ export default function NotchShelf() {
 
   const clearHoverPreview = useCallback(async () => {
     if (!notchHovered) return;
-    setNotchHovered(false);
+    setHoverClosing(true);
     await setNotchHoverPreview(false);
   }, [notchHovered]);
 
@@ -91,6 +95,7 @@ export default function NotchShelf() {
       document.documentElement.classList.remove("notch-shelf", "notch-shelf-dark");
       document.body.classList.remove("notch-shelf");
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+      if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
     };
   }, [refreshPeek]);
 
@@ -140,8 +145,10 @@ export default function NotchShelf() {
       setExpanded(e.payload);
       if (!e.payload) {
         setNotchHovered(false);
+        setHoverClosing(false);
         refreshPeek();
       } else {
+        setHoverClosing(false);
         refreshCategories();
         loadItems();
       }
@@ -149,12 +156,26 @@ export default function NotchShelf() {
     const unlistenHoverPreview = listen<boolean>(
       "notch-shelf:hover-preview",
       (e) => {
-        setNotchHovered(e.payload);
         if (e.payload) {
+          if (hoverCloseTimerRef.current) {
+            clearTimeout(hoverCloseTimerRef.current);
+            hoverCloseTimerRef.current = null;
+          }
+          setHoverClosing(false);
+          setNotchHovered(true);
           refreshPeek();
           refreshCategories();
           loadItems();
+          return;
         }
+        setHoverClosing(true);
+        if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+        hoverCloseTimerRef.current = setTimeout(() => {
+          hoverCloseTimerRef.current = null;
+          setNotchHovered(false);
+          setHoverClosing(false);
+          refreshPeek();
+        }, 240);
       },
     );
     const unlistenOpen = listen("notch-shelf:open", () => {
@@ -242,7 +263,6 @@ export default function NotchShelf() {
 
   async function handleNotchHover(hovered: boolean) {
     if (!settings.notchHoverEnabled || expanded) return;
-    setNotchHovered(hovered);
     await setNotchHoverPreview(hovered);
   }
 
@@ -255,6 +275,11 @@ export default function NotchShelf() {
 
   function handleShelfMouseEnter() {
     cancelLeaveTimer();
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+    setHoverClosing(false);
     if (!settings.notchHoverEnabled || expanded) return;
     void handleNotchHover(true);
   }
@@ -286,21 +311,26 @@ export default function NotchShelf() {
       onMouseLeave={handleShelfMouseLeave}
     >
       <ClipboardFeedback variant="dark" position="bottom" compact />
-      {!shelfOpen && settings.notchHoverEnabled && (
+      {!shelfVisible && settings.notchHoverEnabled && (
         <div
           className="notch-trigger h-full w-full bg-transparent"
           aria-label="Notch clipboard preview"
         />
       )}
 
-      {!shelfOpen && !settings.notchHoverEnabled && (
+      {!shelfVisible && !settings.notchHoverEnabled && (
         <div className="flex h-full w-full items-center justify-center bg-black">
           <CollapsedPeek item={peekItem} />
         </div>
       )}
 
-      {shelfOpen && (
-        <div className="notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]">
+      {shelfVisible && (
+        <div
+          className={cn(
+            "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]",
+            hoverClosing && "notch-expanded-panel-exit",
+          )}
+        >
           <NotchHoverRail
             item={peekItem}
             onOpenLibrary={handleOpenLibrary}
