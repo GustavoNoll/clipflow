@@ -9,7 +9,6 @@ import {
   createCategory,
   copyItemToClipboard,
   deleteItem,
-  formatRelativeTime,
   getContextualRecent,
   itemTypeLabel,
   listCategories,
@@ -22,7 +21,6 @@ import {
 } from "./lib/api";
 import { getItemPeekLabel } from "./lib/item-label";
 import { groupItemsByDate } from "./lib/date-groups";
-import { privacyPreview } from "./lib/privacy";
 import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
 import type { Category, ClipboardItem } from "./lib/types";
@@ -290,15 +288,9 @@ export default function NotchShelf() {
       <ClipboardFeedback variant="dark" position="bottom" compact />
       {!shelfOpen && settings.notchHoverEnabled && (
         <div
-          className="notch-trigger flex h-full w-full items-stretch"
+          className="notch-trigger h-full w-full bg-transparent"
           aria-label="Notch clipboard preview"
-        >
-          <NotchCollapsedTrigger
-            hovered={false}
-            item={peekItem}
-            items={[]}
-          />
-        </div>
+        />
       )}
 
       {!shelfOpen && !settings.notchHoverEnabled && (
@@ -442,41 +434,6 @@ function ActionButton({
   );
 }
 
-function NotchCollapsedTrigger({
-  hovered,
-  item,
-  items,
-  onOpen,
-}: {
-  hovered: boolean;
-  item: ClipboardItem | null;
-  items: ClipboardItem[];
-  onOpen?: () => void;
-}) {
-  return (
-    <div className="flex h-full w-full items-stretch justify-center">
-      <div
-        className={cn(
-          "notch-pill relative flex h-full w-full overflow-hidden bg-black transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-          "rounded-b-[20px]",
-          hovered
-            ? "items-start px-3 pb-3 pt-[34px]"
-            : "mx-auto max-w-[88%] items-center justify-center",
-        )}
-      >
-        {hovered ? (
-          <>
-            <NotchHoverRail item={item} onOpen={onOpen} />
-            <NotchHoverPreview items={items} />
-          </>
-        ) : (
-          <span className="h-[4px] w-9 rounded-full bg-white/30" />
-        )}
-      </div>
-    </div>
-  );
-}
-
 function NotchHoverRail({
   item,
   onOpen,
@@ -574,71 +531,6 @@ function NotchRailIcon({ item }: { item: ClipboardItem }) {
   }
 
   return <AppIcon appName={item.sourceApp} size="sm" />;
-}
-
-function NotchHoverPreview({ items }: { items: ClipboardItem[] }) {
-  return (
-    <div className="flex h-full w-full min-w-0 flex-col">
-      {items.length > 0 ? (
-        <div className="grid min-h-0 flex-1 grid-cols-3 gap-1.5">
-          {items.slice(0, 3).map((item) => (
-            <NotchHoverPreviewCard key={item.id} item={item} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] bg-white/[0.05] ring-1 ring-white/[0.08]">
-          <span className="text-[11px] font-medium text-white/40">
-            Nothing copied yet
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NotchHoverPreviewCard({ item }: { item: ClipboardItem }) {
-  const { settings } = useSettings();
-  const isVisual = (item.itemType === "image" || item.itemType === "file") && item.thumbnail;
-  const isColor = item.itemType === "color";
-  const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
-
-  return (
-    <div className="group/item relative min-h-0 overflow-hidden rounded-[10px] bg-white/[0.06] ring-1 ring-white/[0.08]">
-      {isVisual ? (
-        <img
-          src={item.thumbnail}
-          alt=""
-          className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover/item:scale-[1.03]"
-          draggable={false}
-        />
-      ) : isColor ? (
-        <div className="flex h-full w-full items-center justify-center p-3">
-          <div
-            className="h-12 w-12 rounded-[12px] ring-1 ring-white/15"
-            style={{ backgroundColor: item.content.trim() }}
-          />
-        </div>
-      ) : (
-        <div className="flex h-full w-full flex-col justify-center p-2.5">
-          <p
-            className={cn(
-              "line-clamp-3 text-[11px] font-medium leading-snug text-white/78",
-              item.itemType === "code" && "font-mono text-emerald-300/90",
-              item.itemType === "url" && "text-sky-300/90",
-            )}
-          >
-            {preview}
-          </p>
-        </div>
-      )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/78 via-black/38 to-transparent px-2 pb-1.5 pt-6">
-        <NotchRailIcon item={item} />
-        <p className="min-w-0 truncate text-[10px] font-medium text-white/80">
-          {formatRelativeTime(item.createdAt)}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function CollapsedPeek({ item }: { item: ClipboardItem | null }) {
