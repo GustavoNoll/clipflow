@@ -84,7 +84,7 @@ const faqs = [
   {
     question: "Is this a subscription?",
     answer:
-      "No. ClipFlow is sold as a one-time lifetime license. The launch price is $5, then it moves to $10.",
+      "No. ClipFlow is sold as a one-time lifetime license. The launch price is $10, then it moves to $15.",
   },
   {
     question: "What does lifetime mean?",
@@ -131,7 +131,7 @@ export default function LandingPage() {
           href={checkoutUrl}
           className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black transition-transform hover:-translate-y-0.5"
         >
-          Buy for $5
+          Buy for $10
         </a>
       </header>
 
@@ -156,7 +156,7 @@ export default function LandingPage() {
           </div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[13px] font-medium text-white/72">
             <Sparkles size={14} className="text-[#7d82ff]" />
-            Launch price, $5 lifetime
+            Launch price, $10 lifetime
           </div>
           <h1 className="max-w-4xl text-balance text-[clamp(3rem,8vw,5.9rem)] font-semibold leading-[0.94] tracking-[-0.035em]">
             Clipboard history built into your Mac notch.
@@ -171,7 +171,7 @@ export default function LandingPage() {
               href={checkoutUrl}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#6d71ff] px-6 text-[15px] font-semibold text-white transition-transform hover:-translate-y-0.5"
             >
-              Buy lifetime for $5
+              Buy lifetime for $10
               <ArrowRight size={17} />
             </a>
             <a
@@ -183,7 +183,7 @@ export default function LandingPage() {
             </a>
           </div>
           <p className="mt-4 text-[13px] text-white/42">
-            Price becomes $10 after launch. One-time purchase, no subscription.
+            Price becomes $15 after launch. One-time purchase, no subscription.
           </p>
         </div>
 
@@ -423,7 +423,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="rounded-full bg-[#111114] px-3 py-1.5 text-[12px] font-semibold text-white">
-              Later $10
+              Later $15
             </div>
           </div>
           <ul className="mt-8 space-y-3">
@@ -444,7 +444,7 @@ export default function LandingPage() {
             href={checkoutUrl}
             className="mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#5b5fc7] px-6 text-[15px] font-semibold text-white transition-transform hover:-translate-y-0.5"
           >
-            Buy lifetime for $5
+            Buy lifetime for $10
             <ArrowRight size={17} />
           </a>
           <p className="mt-4 text-center text-[13px] text-[#74747d]">
@@ -525,14 +525,14 @@ export function PricingPage() {
             </span>
           </div>
           <p className="mt-4 text-[15px] leading-7 text-[#555560]">
-            After launch, ClipFlow moves to a $10 lifetime license. There is no
+            After launch, ClipFlow moves to a $15 lifetime license. There is no
             subscription.
           </p>
           <a
             href={checkoutUrl}
             className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#5b5fc7] px-6 text-[15px] font-semibold text-white"
           >
-            Buy lifetime for $5
+            Buy lifetime for $10
             <ArrowRight size={17} />
           </a>
         </section>
@@ -676,7 +676,7 @@ function PolicyLayout({
           href={checkoutUrl}
           className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black"
         >
-          Buy for $5
+          Buy for $10
         </a>
       </header>
       <article className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8">

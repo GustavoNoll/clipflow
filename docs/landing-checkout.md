@@ -9,14 +9,14 @@ VITE_CLIPFLOW_DOWNLOAD_URL=https://github.com/GustavoNoll/clipflow/releases/late
 
 ## Pricing
 
-- Launch price: `$5` lifetime.
-- Post-launch price: `$10` lifetime.
+- Launch price: `$10` lifetime.
+- Post-launch price: `$15` lifetime.
 - Recommended wording: lifetime app license with current major version updates.
 
 ## Paddle setup
 
 1. Create a product named `ClipFlow Lifetime`.
-2. Create a one-time price for `$5`.
+2. Create a one-time price for `$10`.
 3. Enable localized payment methods. Keep Pix enabled for Brazil when available.
 4. Configure post-purchase delivery:
    - link to the latest GitHub release, or
@@ -24,7 +24,7 @@ VITE_CLIPFLOW_DOWNLOAD_URL=https://github.com/GustavoNoll/clipflow/releases/late
    - send a license key through a webhook flow.
 5. Copy the Paddle checkout URL into `VITE_CLIPFLOW_CHECKOUT_URL`.
 
-After launch, update the product price to `$10` and keep the landing copy unchanged unless the launch period has ended.
+After launch, update the product price to `$15` and keep the landing copy unchanged unless the launch period has ended.
 
 ## License flow
 
