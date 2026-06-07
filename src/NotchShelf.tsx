@@ -25,6 +25,7 @@ import {
   listCategories,
   listItems,
   listRecentDownloads,
+  openDownloadPath,
   openLibraryWindow,
   pasteDownloadByPath,
   pasteItemById,
@@ -46,6 +47,7 @@ interface NotchCopyFeedbackPayload {
   labels: string[];
   firstItemType: string;
   firstSourceApp?: string | null;
+  message?: string;
 }
 
 export default function NotchShelf() {
@@ -162,22 +164,40 @@ export default function NotchShelf() {
   }, [items]);
 
   useEffect(() => {
+    function showFeedback(payload: NotchCopyFeedbackPayload) {
+      if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
+      setCopyFeedback(payload);
+      copyFeedbackTimerRef.current = setTimeout(() => {
+        setCopyFeedback(null);
+      }, 1450);
+    }
+
     const unlistenCopied = listen<NotchCopyFeedbackPayload>(
       "notch-shelf:copy-feedback",
       (event) => {
-        if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
-        setCopyFeedback(event.payload);
-        copyFeedbackTimerRef.current = setTimeout(() => {
-          setCopyFeedback(null);
-        }, 1450);
+        showFeedback(event.payload);
       },
     );
 
+    function onLocalFeedback(event: Event) {
+      const detail = (event as CustomEvent<string>).detail;
+      if (!detail || detail.startsWith("Copied")) return;
+      showFeedback({
+        count: 1,
+        labels: [],
+        firstItemType: "text",
+        firstSourceApp: "ClipFlow",
+        message: detail || t("copiedToClipboard"),
+      });
+    }
+    window.addEventListener("clipflow:clipboard-feedback", onLocalFeedback);
+
     return () => {
       if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
+      window.removeEventListener("clipflow:clipboard-feedback", onLocalFeedback);
       unlistenCopied.then((fn) => fn());
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -341,6 +361,15 @@ export default function NotchShelf() {
     }
   }
 
+  async function handlePrimaryAction(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (downloadsOnly && item && isDownloadItem(item)) {
+      await openDownloadPath(item.content);
+      return;
+    }
+    await handleCopy(id);
+  }
+
   async function handleCopy(id: string) {
     const item = items.find((candidate) => candidate.id === id);
     if (downloadsOnly && item && isDownloadItem(item)) {
@@ -486,6 +515,9 @@ export default function NotchShelf() {
             onInstallUpdate={handleInstallUpdate}
             className="notch-rail-enter"
           />
+          {shelfVisible && copyFeedback && (
+            <NotchInlineFeedback feedback={copyFeedback} />
+          )}
 
           {selected.size > 0 && (
             <div className="notch-actions-enter flex min-h-10 items-center justify-end gap-2 px-6 pt-3 pb-2.5">
@@ -583,6 +615,7 @@ export default function NotchShelf() {
                           selected={selected.has(item.id)}
                           onPaste={handlePaste}
                           onCopy={handleCopy}
+                          onPrimaryAction={handlePrimaryAction}
                           onFavorite={handleFavorite}
                           onDelete={handleDelete}
                           onToggleSelect={handleToggleSelect}
@@ -605,6 +638,7 @@ function NotchCopyFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload })
     feedback.count === 1 ? "item" : "items"
   }`;
   const details = feedback.labels.filter(Boolean).join(", ");
+  const message = feedback.message ?? label;
 
   return (
     <div
@@ -620,9 +654,42 @@ function NotchCopyFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload })
           </span>
         )}
         <p className="min-w-0 truncate text-[12px] font-semibold tracking-tight text-white/88">
-          {label}
-          {details && <span className="text-white/62"> · {details}</span>}
+          {message}
+          {!feedback.message && details && (
+            <span className="text-white/62"> · {details}</span>
+          )}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function NotchInlineFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload }) {
+  const label = `${feedback.count} ${
+    feedback.count === 1 ? "item" : "items"
+  }`;
+  const details = feedback.labels.filter(Boolean).join(", ");
+  const message = feedback.message ?? label;
+
+  return (
+    <div
+      aria-live="polite"
+      className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-6"
+    >
+      <div className="flex max-w-[360px] items-center gap-2 rounded-full bg-white px-3 py-2 text-[12px] font-bold text-black shadow-[0_14px_36px_rgba(0,0,0,0.34)] ring-1 ring-white/50">
+        {feedback.firstSourceApp ? (
+          <AppIcon appName={feedback.firstSourceApp} size="sm" />
+        ) : (
+          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] bg-black text-white">
+            <Copy size={11} strokeWidth={2.4} />
+          </span>
+        )}
+        <span className="min-w-0 truncate">
+          {message}
+          {!feedback.message && details && (
+            <span className="text-black/56"> · {details}</span>
+          )}
+        </span>
       </div>
     </div>
   );

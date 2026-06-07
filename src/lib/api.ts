@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type {
   Category,
   ClipboardItem,
@@ -227,6 +228,24 @@ export async function pasteDownloadByPath(path: string): Promise<void> {
       }),
     );
   }
+}
+
+export async function openDownloadPath(path: string): Promise<void> {
+  try {
+    await openPath(path);
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "Download open failed",
+      }),
+    );
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("clipflow:clipboard-feedback", {
+      detail: "Opened download",
+    }),
+  );
 }
 
 export async function pasteItemById(id: string): Promise<void> {

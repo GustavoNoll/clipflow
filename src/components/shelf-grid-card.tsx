@@ -15,6 +15,7 @@ interface ShelfGridCardProps {
   selected?: boolean;
   onPaste: (id: string) => void;
   onCopy: (id: string) => void;
+  onPrimaryAction?: (id: string) => void;
   onFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleSelect?: (id: string) => void;
@@ -28,6 +29,7 @@ export function ShelfGridCard({
   selected,
   onPaste,
   onCopy,
+  onPrimaryAction,
   onFavorite,
   onDelete,
   onToggleSelect,
@@ -96,7 +98,7 @@ export function ShelfGridCard({
           onToggleSelect?.(item.id);
           return;
         }
-        onCopy(item.id);
+        (onPrimaryAction ?? onCopy)(item.id);
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -115,7 +117,12 @@ export function ShelfGridCard({
         <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              setMenu({ x: rect.left, y: rect.bottom + 6 });
+            }}
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm",
               isLight
