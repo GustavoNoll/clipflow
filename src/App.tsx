@@ -37,6 +37,7 @@ import {
 } from "./lib/api";
 import { LANGUAGE_OPTIONS, translateCategoryName, useI18n, type Language } from "./lib/i18n";
 import { useSettings } from "./lib/settings-context";
+import { useUpdateStatus } from "./lib/update-status-context";
 import type { Category, ClipboardItem, ItemType, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
@@ -44,6 +45,7 @@ type FilterView = "all" | "favorites" | "category" | "app" | "type";
 
 export default function App() {
   const { settings, updateSettings, loaded } = useSettings();
+  const { update } = useUpdateStatus();
   const { t } = useI18n();
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -442,6 +444,16 @@ export default function App() {
                 {t("deleteCount", { count: selected.size })}
               </button>
             </>
+          )}
+          {update && (
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="btn-ghost border border-amber-400/25 bg-amber-400/10 text-amber-600 hover:bg-amber-400/15"
+              title={t("versionAvailable", { version: update.version })}
+            >
+              {t("versionAvailable", { version: update.version })}
+            </button>
           )}
           <button type="button" onClick={handleClearHistory} className="btn-ghost">
             {t("clearAll")}
