@@ -48,6 +48,10 @@ export async function getContextualRecent(limit = 10): Promise<ClipboardItem[]> 
   return invoke("get_contextual_recent", { limit });
 }
 
+export async function listRecentDownloads(limit = 12): Promise<ClipboardItem[]> {
+  return invoke("list_recent_downloads", { limit });
+}
+
 export async function deleteItem(id: string): Promise<void> {
   return invoke("delete_item", { id });
 }
@@ -160,6 +164,50 @@ export async function copyItemsToClipboard(ids: string[], message?: string): Pro
   );
 }
 
+export async function copyDownloadToClipboard(path: string, message?: string): Promise<void> {
+  try {
+    await invoke("copy_download_to_clipboard", { path });
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "Download copy failed",
+      }),
+    );
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("clipflow:clipboard-feedback", {
+      detail: message ?? "Copied download",
+    }),
+  );
+}
+
+export async function copyDownloadPathsToClipboard(
+  paths: string[],
+  message?: string,
+): Promise<void> {
+  let copiedCount = paths.length;
+  try {
+    copiedCount = await invoke<number>("copy_download_paths_to_clipboard", { paths });
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "Download copy failed",
+      }),
+    );
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("clipflow:clipboard-feedback", {
+      detail:
+        message ??
+        (copiedCount === 1
+          ? "Copied 1 download"
+          : `Copied ${copiedCount} downloads`),
+    }),
+  );
+}
+
 export async function copyTextToClipboard(text: string, message?: string): Promise<void> {
   await invoke("copy_text_to_clipboard", { text });
   window.dispatchEvent(
@@ -167,6 +215,18 @@ export async function copyTextToClipboard(text: string, message?: string): Promi
       detail: message ?? "Copied to clipboard",
     }),
   );
+}
+
+export async function pasteDownloadByPath(path: string): Promise<void> {
+  try {
+    await invoke("paste_download_by_path", { path });
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "Download paste failed",
+      }),
+    );
+  }
 }
 
 export async function pasteItemById(id: string): Promise<void> {

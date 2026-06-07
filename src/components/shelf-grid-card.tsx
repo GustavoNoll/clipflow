@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { type DragEvent, useState } from "react";
 import { MoreHorizontal, Pin, Star, Trash2 } from "lucide-react";
-import { copyItemToClipboard } from "../lib/api";
 import { ItemMetaFooter } from "./item-meta-footer";
 import { useI18n } from "../lib/i18n";
 import { isSensitiveContent, privacyPreview } from "../lib/privacy";
@@ -19,6 +18,8 @@ interface ShelfGridCardProps {
   onFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleSelect?: (id: string) => void;
+  onDragStart?: (item: ClipboardItem, event: DragEvent<HTMLElement>) => void;
+  onDragEnd?: () => void;
 }
 
 export function ShelfGridCard({
@@ -30,6 +31,8 @@ export function ShelfGridCard({
   onFavorite,
   onDelete,
   onToggleSelect,
+  onDragStart,
+  onDragEnd,
 }: ShelfGridCardProps) {
   const { settings } = useSettings();
   const { t } = useI18n();
@@ -56,10 +59,7 @@ export function ShelfGridCard({
       id: "copy",
       label: isSensitiveLocked ? t("unlockCopy") : t("copyToClipboard"),
       onSelect: () => {
-        void copyItemToClipboard(
-          item.id,
-          t("copiedToClipboard"),
-        );
+        onCopy(item.id);
       },
     },
     ...(isSensitiveLocked ? [] : smartActionsForItem(item).map((action) => ({
@@ -86,8 +86,13 @@ export function ShelfGridCard({
     <>
     <article
       className="group relative h-full cursor-pointer"
+      draggable={Boolean(onDragStart)}
+      onDragStart={(event) => onDragStart?.(item, event)}
+      onDragEnd={onDragEnd}
       onClick={(event) => {
-        if (event.metaKey || event.altKey) {
+        if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
           onToggleSelect?.(item.id);
           return;
         }
@@ -177,7 +182,7 @@ export function ShelfGridCard({
               src={item.thumbnail}
               alt=""
               className="h-full w-full object-cover"
-              draggable
+              draggable={false}
             />
             {displayName && (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-2.5 pb-2 pt-8">

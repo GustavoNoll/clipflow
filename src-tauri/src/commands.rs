@@ -165,6 +165,142 @@ pub fn get_contextual_recent(
 }
 
 #[tauri::command]
+pub fn list_recent_downloads(limit: Option<i64>) -> Result<Vec<ClipboardItem>, String> {
+    let downloads_dir = downloads_dir()?;
+    let limit = limit.unwrap_or(12).clamp(1, 50) as usize;
+    let mut entries = std::fs::read_dir(&downloads_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            let metadata = entry.metadata().ok()?;
+            let modified = metadata.modified().ok()?;
+            Some((path, metadata.len() as i64, modified))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| right.2.cmp(&left.2));
+
+    Ok(entries
+        .into_iter()
+        .take(limit)
+        .filter_map(|(path, size, modified)| download_item(path, size, modified).ok())
+        .collect())
+}
+
+#[tauri::command]
+pub fn copy_download_to_clipboard(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    write_download_paths_to_clipboard(&app, &state.monitor, vec![path]).map(|_| ())
+}
+
+#[tauri::command]
+pub fn copy_download_paths_to_clipboard(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<usize, String> {
+    write_download_paths_to_clipboard(&app, &state.monitor, paths)
+}
+
+fn write_download_paths_to_clipboard(
+    app: &tauri::AppHandle,
+    monitor: &ClipboardMonitor,
+    paths: Vec<String>,
+) -> Result<usize, String> {
+    let paths = existing_download_paths(paths)?;
+    monitor.suppress_next();
+    platform::write_file_urls(&paths)?;
+    emit_copy_feedback(
+        app,
+        CopyFeedbackPayload {
+            count: paths.len(),
+            labels: vec!["File".to_string()],
+            first_item_type: "file".to_string(),
+            first_source_app: Some("Downloads".to_string()),
+        },
+    );
+    Ok(paths.len())
+}
+
+#[tauri::command]
+pub fn paste_download_by_path(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    let path = existing_download_paths(vec![path])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "Download file not found".to_string())?;
+    let item = download_item_from_path(&path)?;
+    let settings = state.db.lock().get_settings().unwrap_or_default();
+    if settings.auto_paste {
+        paste_item(&item, &state.monitor).map_err(|e| e.to_string())
+    } else {
+        restore_to_clipboard(&item, &state.monitor).map_err(|e| e.to_string())
+    }
+}
+
+fn downloads_dir() -> Result<PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME is unavailable".to_string())?;
+    Ok(PathBuf::from(home).join("Downloads"))
+}
+
+fn existing_download_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, String> {
+    let downloads_dir = downloads_dir()?.canonicalize().map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for path in paths {
+        let path = PathBuf::from(path);
+        let canonical = path.canonicalize().map_err(|e| e.to_string())?;
+        if !canonical.starts_with(&downloads_dir) {
+            return Err("File is outside Downloads".to_string());
+        }
+        result.push(canonical);
+    }
+    if result.is_empty() {
+        return Err("No download files selected".to_string());
+    }
+    Ok(result)
+}
+
+fn download_item_from_path(path: &PathBuf) -> Result<ClipboardItem, String> {
+    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    let modified = metadata.modified().map_err(|e| e.to_string())?;
+    download_item(path.clone(), metadata.len() as i64, modified)
+}
+
+fn download_item(
+    path: PathBuf,
+    size: i64,
+    modified: std::time::SystemTime,
+) -> Result<ClipboardItem, String> {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("Download")
+        .to_string();
+    let created_at = chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339();
+    let content = path.to_string_lossy().to_string();
+    Ok(ClipboardItem {
+        id: format!("download:{}", hash_content(content.as_bytes())),
+        content,
+        preview: file_name.clone(),
+        item_type: ItemType::File.as_str().to_string(),
+        source_app: Some("Downloads".to_string()),
+        category_id: -2,
+        category_name: "Downloads".to_string(),
+        is_favorite: false,
+        is_pinned: false,
+        pin_shortcut: None,
+        file_name: Some(file_name),
+        mime_type: Some("application/octet-stream".to_string()),
+        thumbnail: None,
+        content_size: size,
+        created_at,
+        tags: vec![],
+    })
+}
+
+#[tauri::command]
 pub fn get_item(state: State<'_, AppState>, id: String) -> Result<ClipboardItem, String> {
     let db = state.db.lock();
     db.get_item(&id).map_err(|e| e.to_string())

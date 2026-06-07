@@ -482,12 +482,24 @@ pub fn restore_to_clipboard(
                 .set_text(&item.content)
                 .map_err(|e| e.to_string())?;
         }
-        ItemType::File
-        | ItemType::Text
-        | ItemType::Url
-        | ItemType::Code
-        | ItemType::Color
-        | ItemType::Bundle => {
+        ItemType::File => {
+            let paths = item
+                .content
+                .lines()
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .map(std::path::PathBuf::from)
+                .filter(|path| path.exists())
+                .collect::<Vec<_>>();
+            if !paths.is_empty() {
+                platform::write_file_urls(&paths)?;
+                return Ok(());
+            }
+            clipboard
+                .set_text(&item.content)
+                .map_err(|e| e.to_string())?;
+        }
+        ItemType::Text | ItemType::Url | ItemType::Code | ItemType::Color | ItemType::Bundle => {
             clipboard
                 .set_text(&item.content)
                 .map_err(|e| e.to_string())?;

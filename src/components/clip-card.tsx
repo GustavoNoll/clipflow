@@ -1,8 +1,5 @@
 import { useState } from "react";
 import { AppIcon } from "./app-icon";
-import {
-  copyItemToClipboard,
-} from "../lib/api";
 import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
 import {
   formatRelativeTimeForLanguage,
@@ -65,10 +62,7 @@ export function ClipCard({
       id: "copy",
       label: isSensitiveLocked ? t("unlockCopy") : t("copyToClipboard"),
       onSelect: () => {
-        void copyItemToClipboard(
-          item.id,
-          t("copiedToClipboard"),
-        );
+        onCopy?.(item.id);
       },
     },
     ...(isSensitiveLocked ? [] : smartActionsForItem(item).map((action) => ({
@@ -125,7 +119,9 @@ export function ClipCard({
         selected && "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]",
       )}
       onClick={(event) => {
-        if (event.metaKey || event.altKey) {
+        if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
           onToggleSelect?.(item.id);
           return;
         }
@@ -223,6 +219,7 @@ export function ClipCard({
             src={item.thumbnail}
             alt="Clipboard image"
             className="h-28 w-full object-cover"
+            draggable={false}
           />
         </div>
       ) : isColor && colorValue ? (

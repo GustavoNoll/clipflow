@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Heart, Search } from "lucide-react";
+import { Copy, Download, Heart, Search } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
@@ -12,9 +12,12 @@ import {
 import {
   copyItemToClipboard,
   copyItemsToClipboard,
+  copyDownloadPathsToClipboard,
+  copyDownloadToClipboard,
   getContextualRecent,
   listCategories,
   listItems,
+  listRecentDownloads,
   listSourceApps,
 } from "./lib/api";
 import { getItemSizeLabel, getSourceAppLabel } from "./lib/item-meta";
@@ -29,6 +32,7 @@ import type { Category, ClipboardItem, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
 const FAVORITES_CATEGORY_ID = -1;
+const DOWNLOADS_CATEGORY_ID = -2;
 
 function isHistoryCategory(category?: Category) {
   return category?.name.trim().toLowerCase() === "history";
@@ -39,6 +43,7 @@ export default function QuickPaste() {
   const { settings } = useSettings();
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<ClipboardItem[]>([]);
+  const [downloads, setDownloads] = useState<ClipboardItem[]>([]);
   const [favorites, setFavorites] = useState<ClipboardItem[]>([]);
   const [searchResults, setSearchResults] = useState<ClipboardItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -49,13 +54,15 @@ export default function QuickPaste() {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [recentItems, favItems, cats, apps] = await Promise.all([
+    const [recentItems, downloadItems, favItems, cats, apps] = await Promise.all([
       getContextualRecent(10),
+      listRecentDownloads(12),
       listItems({ favoritesOnly: true, limit: 8, offset: 0 }),
       listCategories(),
       listSourceApps(),
     ]);
     setRecent(recentItems);
+    setDownloads(downloadItems);
     setFavorites(favItems.items);
     setCategories(cats);
     setSourceApps(apps);
@@ -92,16 +99,30 @@ export default function QuickPaste() {
       setLoading(true);
       try {
         const selectedCategory = categories.find((cat) => cat.id === activeCategory);
+        const showingDownloads = activeCategory === DOWNLOADS_CATEGORY_ID;
         const shouldFilterCategory =
           activeCategory &&
           activeCategory !== FAVORITES_CATEGORY_ID &&
+          activeCategory !== DOWNLOADS_CATEGORY_ID &&
           !isHistoryCategory(selectedCategory);
         const shouldLoadAllHistory =
           activeCategory &&
           activeCategory !== FAVORITES_CATEGORY_ID &&
+          activeCategory !== DOWNLOADS_CATEGORY_ID &&
           isHistoryCategory(selectedCategory);
 
-        if (query.trim()) {
+        if (showingDownloads) {
+          const downloadItems = await listRecentDownloads(20);
+          const normalizedQuery = query.trim().toLowerCase();
+          setDownloads(
+            normalizedQuery
+              ? downloadItems.filter((item) =>
+                  `${item.preview} ${item.content}`.toLowerCase().includes(normalizedQuery),
+                )
+              : downloadItems,
+          );
+          setSearchResults([]);
+        } else if (query.trim()) {
           const result = await listItems({
             query: query.trim(),
             categoryId: shouldFilterCategory ? activeCategory : undefined,
@@ -129,11 +150,17 @@ export default function QuickPaste() {
   async function handleSelect(id: string) {
     const item = [...recent, ...favorites, ...searchResults].find(
       (candidate) => candidate.id === id,
+    ) ?? downloads.find(
+      (candidate) => candidate.id === id,
     );
-    await copyItemToClipboard(
-      id,
-      item ? t("copiedToClipboard") : undefined,
-    );
+    if (activeCategory === DOWNLOADS_CATEGORY_ID && item) {
+      await copyDownloadToClipboard(item.content, t("copiedToClipboard"));
+    } else {
+      await copyItemToClipboard(
+        id,
+        item ? t("copiedToClipboard") : undefined,
+      );
+    }
     await getCurrentWindow().hide();
   }
 
@@ -150,22 +177,27 @@ export default function QuickPaste() {
   }
 
   const showingFavorites = activeCategory === FAVORITES_CATEGORY_ID;
+  const showingDownloads = activeCategory === DOWNLOADS_CATEGORY_ID;
   const selectedCategory = categories.find((cat) => cat.id === activeCategory);
   const historyCategorySelected =
     Boolean(activeCategory) && isHistoryCategory(selectedCategory);
   const showingHistory =
-    !showingFavorites && (!activeCategory || isHistoryCategory(selectedCategory));
-  const displayItems = query.trim()
-    ? searchResults
-    : showingFavorites
+    !showingFavorites &&
+    !showingDownloads &&
+    (!activeCategory || isHistoryCategory(selectedCategory));
+  const displayItems = showingDownloads
+    ? downloads
+    : query.trim()
+      ? searchResults
+      : showingFavorites
       ? favorites
       : historyCategorySelected
         ? searchResults
-      : showingHistory
-        ? recent
-        : activeCategory
-        ? searchResults
-        : recent;
+        : showingHistory
+          ? recent
+          : activeCategory
+            ? searchResults
+            : recent;
 
   const handleBatchCopy = useCallback(async () => {
     if (selected.size === 0) return;
@@ -173,9 +205,15 @@ export default function QuickPaste() {
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
     if (orderedIds.length === 0) return;
-    await copyItemsToClipboard(orderedIds);
+    if (showingDownloads) {
+      await copyDownloadPathsToClipboard(
+        displayItems.filter((item) => selected.has(item.id)).map((item) => item.content),
+      );
+    } else {
+      await copyItemsToClipboard(orderedIds);
+    }
     setSelected(new Set());
-  }, [displayItems, selected, t]);
+  }, [displayItems, selected, showingDownloads]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -297,7 +335,8 @@ export default function QuickPaste() {
               }
               className={cn(
                 "shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
-                activeCategory === cat.id || (isHistoryCategory(cat) && showingHistory)
+                (activeCategory === cat.id && !showingDownloads) ||
+                  (isHistoryCategory(cat) && showingHistory)
                   ? "bg-white text-black"
                   : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
               )}
@@ -308,13 +347,40 @@ export default function QuickPaste() {
               )}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() =>
+              setActiveCategory((prev) =>
+                prev === DOWNLOADS_CATEGORY_ID ? undefined : DOWNLOADS_CATEGORY_ID,
+              )
+            }
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
+              showingDownloads
+                ? "bg-white text-black"
+                : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
+            )}
+          >
+            <Download size={12} />
+            {t("downloads")}
+          </button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-1 scrollbar-thin">
         <section>
           <QuickSectionHeader
-            label={query.trim() ? t("results") : showingFavorites ? t("favorites") : showingHistory ? t("recent") : t("category")}
+            label={
+              showingDownloads
+                ? t("downloads")
+                : query.trim()
+                  ? t("results")
+                  : showingFavorites
+                    ? t("favorites")
+                    : showingHistory
+                      ? t("recent")
+                      : t("category")
+            }
             detail={displayItems.length > 0 ? t("shown", { count: displayItems.length }) : undefined}
           />
           <div>
@@ -433,7 +499,9 @@ function QuickRow({
     <button
       type="button"
       onClick={(event) => {
-        if (event.metaKey || event.altKey) {
+        if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
           onToggleSelect(item.id);
           return;
         }
@@ -457,6 +525,7 @@ function QuickRow({
           src={item.thumbnail}
           alt=""
           className="absolute inset-0 h-full w-full object-cover opacity-88 transition-transform duration-200 group-hover:scale-[1.02]"
+          draggable={false}
         />
       ) : isColor ? (
         <div
