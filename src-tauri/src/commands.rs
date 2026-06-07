@@ -1142,3 +1142,33 @@ fn encode_png(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
     }
     png_data
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn file_items_from_paths_creates_bench_file_items() {
+        let path = std::env::temp_dir().join(format!("clipflow-bench-drop-{}.txt", Uuid::new_v4()));
+        fs::write(&path, "bench file").expect("write temp bench file");
+
+        let items =
+            file_items_from_paths(vec![path.to_string_lossy().to_string()]).expect("file item");
+
+        fs::remove_file(&path).ok();
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].id.starts_with("file:"));
+        assert_eq!(items[0].item_type, "file");
+        assert_eq!(items[0].category_id, -3);
+        assert_eq!(items[0].category_name, "Bench");
+        assert_eq!(
+            items[0].file_name.as_deref(),
+            path.file_name().and_then(|name| name.to_str())
+        );
+        assert!(items[0]
+            .content
+            .ends_with(path.file_name().unwrap().to_str().unwrap()));
+    }
+}

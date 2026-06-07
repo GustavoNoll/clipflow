@@ -53,8 +53,11 @@ interface NotchCopyFeedbackPayload {
 }
 
 interface TauriFileDropPayload {
+  type: "enter" | "over" | "drop" | "leave";
   paths?: string[];
 }
+
+const BENCH_STORAGE_KEY = "clipflow:notch-bench-items";
 
 export default function NotchShelf() {
   const { settings } = useSettings();
@@ -184,6 +187,21 @@ export default function NotchShelf() {
   }, [items]);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem(BENCH_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as ClipboardItem[];
+      if (Array.isArray(parsed)) setBenchItems(parsed.slice(0, 6));
+    } catch {
+      localStorage.removeItem(BENCH_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(BENCH_STORAGE_KEY, JSON.stringify(benchItems));
+  }, [benchItems]);
+
+  useEffect(() => {
     function cleanupDragState() {
       if (dragCleanupTimerRef.current) {
         clearTimeout(dragCleanupTimerRef.current);
@@ -200,24 +218,20 @@ export default function NotchShelf() {
   }, []);
 
   useEffect(() => {
-    const unlistenDragEnter = listen<TauriFileDropPayload>(
-      "tauri://drag-enter",
-      (event) => {
-        if (event.payload.paths?.length) revealBenchDropTarget();
-      },
-    );
-    const unlistenDragOver = listen<TauriFileDropPayload>(
-      "tauri://drag-over",
-      (event) => {
-        if (event.payload.paths?.length) revealBenchDropTarget();
-      },
-    );
-    const unlistenDragLeave = listen("tauri://drag-leave", () => {
-      if (!draggedItemRef.current) setBenchDropActive(false);
-    });
-    const unlistenDrop = listen<TauriFileDropPayload>(
-      "tauri://drag-drop",
-      (event) => {
+    const unlistenDragDrop = getCurrentWindow().onDragDropEvent(
+      (event: { payload: TauriFileDropPayload }) => {
+        if (event.payload.type === "enter") {
+          if (event.payload.paths?.length) revealBenchDropTarget();
+          return;
+        }
+        if (event.payload.type === "over") {
+          setBenchDropActive(true);
+          return;
+        }
+        if (event.payload.type === "leave") {
+          if (!draggedItemRef.current) setBenchDropActive(false);
+          return;
+        }
         setBenchDropActive(false);
         if (event.payload.paths?.length) {
           void addBenchPaths(event.payload.paths);
@@ -226,10 +240,7 @@ export default function NotchShelf() {
     );
 
     return () => {
-      unlistenDragEnter.then((fn) => fn());
-      unlistenDragOver.then((fn) => fn());
-      unlistenDragLeave.then((fn) => fn());
-      unlistenDrop.then((fn) => fn());
+      unlistenDragDrop.then((fn) => fn());
     };
   }, [benchOnly]);
 
