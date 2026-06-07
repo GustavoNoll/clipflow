@@ -5,10 +5,16 @@ import { Heart, Search } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
+  applyFirstSearchFilterSuggestion,
+  hasSearchFilterSuggestion,
+  SearchFilterSuggestions,
+} from "./components/search-filter-suggestions";
+import {
   copyItemToClipboard,
   getContextualRecent,
   listCategories,
   listItems,
+  listSourceApps,
 } from "./lib/api";
 import { getItemSizeLabel, getSourceAppLabel } from "./lib/item-meta";
 import { privacyPreview } from "./lib/privacy";
@@ -18,7 +24,7 @@ import {
   translateCategoryName,
   useI18n,
 } from "./lib/i18n";
-import type { Category, ClipboardItem } from "./lib/types";
+import type { Category, ClipboardItem, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
 const FAVORITES_CATEGORY_ID = -1;
@@ -35,19 +41,22 @@ export default function QuickPaste() {
   const [favorites, setFavorites] = useState<ClipboardItem[]>([]);
   const [searchResults, setSearchResults] = useState<ClipboardItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [sourceApps, setSourceApps] = useState<SourceApp[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [recentItems, favItems, cats] = await Promise.all([
+    const [recentItems, favItems, cats, apps] = await Promise.all([
       getContextualRecent(10),
       listItems({ favoritesOnly: true, limit: 8, offset: 0 }),
       listCategories(),
+      listSourceApps(),
     ]);
     setRecent(recentItems);
     setFavorites(favItems.items);
     setCategories(cats);
+    setSourceApps(apps);
   }, []);
 
   useEffect(() => {
@@ -166,6 +175,7 @@ export default function QuickPaste() {
   useEffect(() => {
     function onNavigation(event: KeyboardEvent) {
       if (displayItems.length === 0) return;
+      if (hasSearchFilterSuggestion(query, sourceApps)) return;
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault();
         setSelectedIndex((index) => Math.min(index + 1, displayItems.length - 1));
@@ -183,7 +193,7 @@ export default function QuickPaste() {
 
     window.addEventListener("keydown", onNavigation);
     return () => window.removeEventListener("keydown", onNavigation);
-  }, [displayItems, selectedIndex]);
+  }, [displayItems, query, selectedIndex, sourceApps]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-black/35 bg-black/58 shadow-[0_26px_70px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
@@ -200,8 +210,23 @@ export default function QuickPaste() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  (event.key === "Enter" || event.key === "Tab") &&
+                  hasSearchFilterSuggestion(query, sourceApps)
+                ) {
+                  event.preventDefault();
+                  setQuery(applyFirstSearchFilterSuggestion(query, sourceApps));
+                }
+              }}
               placeholder={t("searchClipboard")}
               className="quick-paste-search-input h-10 w-full appearance-none border-0 bg-transparent pl-9 pr-3 text-[13px] font-semibold tracking-tight text-white/86 outline-none placeholder:text-white/38 focus:outline-none"
+            />
+            <SearchFilterSuggestions
+              query={query}
+              sourceApps={sourceApps}
+              dark
+              onApply={setQuery}
             />
           </div>
         </div>

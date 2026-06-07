@@ -18,6 +18,11 @@ import { AppLogo } from "./components/app-logo";
 import { ClipCard } from "./components/clip-card";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import { SettingsPanel } from "./components/settings-panel";
+import {
+  applyFirstSearchFilterSuggestion,
+  hasSearchFilterSuggestion,
+  SearchFilterSuggestions,
+} from "./components/search-filter-suggestions";
 import { ShortcutsReference } from "./components/shortcuts-reference";
 import {
   clearHistory,
@@ -568,6 +573,15 @@ export default function App() {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    (event.key === "Enter" || event.key === "Tab") &&
+                    hasSearchFilterSuggestion(query, sourceApps)
+                  ) {
+                    event.preventDefault();
+                    setQuery(applyFirstSearchFilterSuggestion(query, sourceApps));
+                  }
+                }}
                 placeholder={t("searchLibrary")}
                 className="input-field pl-9"
                 aria-label={t("searchLibraryAria")}
@@ -575,6 +589,14 @@ export default function App() {
               <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">
                 {t("searchFilterHint")}
               </p>
+              <SearchFilterSuggestions
+                query={query}
+                sourceApps={sourceApps}
+                onApply={(nextQuery) => {
+                  setQuery(nextQuery);
+                  searchRef.current?.focus();
+                }}
+              />
             </div>
           </div>
 

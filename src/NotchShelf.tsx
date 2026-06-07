@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
+import {
+  applyFirstSearchFilterSuggestion,
+  hasSearchFilterSuggestion,
+  SearchFilterSuggestions,
+} from "./components/search-filter-suggestions";
 import { ShelfGridCard } from "./components/shelf-grid-card";
 import {
   createCategory,
@@ -20,6 +25,7 @@ import {
   itemTypeLabel,
   listCategories,
   listItems,
+  listSourceApps,
   openLibraryWindow,
   pasteItemById,
   setNotchExpanded,
@@ -32,7 +38,7 @@ import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
 import { translateCategoryName, useI18n } from "./lib/i18n";
 import { useUpdateStatus } from "./lib/update-status-context";
-import type { Category, ClipboardItem } from "./lib/types";
+import type { Category, ClipboardItem, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
 export default function NotchShelf() {
@@ -43,6 +49,7 @@ export default function NotchShelf() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [sourceApps, setSourceApps] = useState<SourceApp[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [items, setItems] = useState<ClipboardItem[]>([]);
@@ -61,9 +68,10 @@ export default function NotchShelf() {
     setPeekItem(recent[0] ?? null);
   }, []);
 
-  const refreshCategories = useCallback(async () => {
-    const cats = await listCategories();
+  const refreshMeta = useCallback(async () => {
+    const [cats, apps] = await Promise.all([listCategories(), listSourceApps()]);
     setCategories(cats);
+    setSourceApps(apps);
   }, []);
 
   const loadItems = useCallback(async () => {
@@ -120,8 +128,8 @@ export default function NotchShelf() {
   }, [debouncedQuery, activeCategory, favoritesOnly, shelfOpen, loadItems]);
 
   useEffect(() => {
-    refreshCategories();
-  }, [refreshCategories]);
+    refreshMeta();
+  }, [refreshMeta]);
 
   useEffect(() => {
     if (!settings.notchHoverEnabled) return;
@@ -160,7 +168,7 @@ export default function NotchShelf() {
         refreshPeek();
       } else {
         setHoverClosing(false);
-        refreshCategories();
+        refreshMeta();
         loadItems();
       }
     });
@@ -175,7 +183,7 @@ export default function NotchShelf() {
           setHoverClosing(false);
           setNotchHovered(true);
           refreshPeek();
-          refreshCategories();
+          refreshMeta();
           loadItems();
           return;
         }
@@ -193,18 +201,18 @@ export default function NotchShelf() {
       setExpanded(true);
       setQuery("");
       setDebouncedQuery("");
-      refreshCategories();
+      refreshMeta();
       loadItems();
     });
     const unlistenNew = listen("clipboard:new-item", () => {
       refreshPeek();
       if (shelfOpen) loadItems();
-      refreshCategories();
+      refreshMeta();
     });
     const unlistenCleared = listen("clipboard:history-cleared", () => {
       setPeekItem(null);
       setItems([]);
-      refreshCategories();
+      refreshMeta();
     });
     return () => {
       unlistenExpanded.then((fn) => fn());
@@ -213,7 +221,7 @@ export default function NotchShelf() {
       unlistenNew.then((fn) => fn());
       unlistenCleared.then((fn) => fn());
     };
-  }, [loadItems, refreshCategories, refreshPeek, shelfOpen]);
+  }, [loadItems, refreshMeta, refreshPeek, shelfOpen]);
 
   function selectFavorites() {
     setFavoritesOnly((prev) => {
@@ -258,13 +266,13 @@ export default function NotchShelf() {
         item.id === id ? { ...item, isFavorite: !item.isFavorite } : item,
       ),
     );
-    refreshCategories();
+    refreshMeta();
   }
 
   async function handleDelete(id: string) {
     await deleteItem(id);
     setItems((prev) => prev.filter((item) => item.id !== id));
-    refreshCategories();
+    refreshMeta();
     refreshPeek();
   }
 
@@ -312,7 +320,7 @@ export default function NotchShelf() {
     const name = prompt("Category name");
     if (!name?.trim()) return;
     await createCategory(name.trim());
-    refreshCategories();
+    refreshMeta();
   }
 
   return (
@@ -356,8 +364,23 @@ export default function NotchShelf() {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    (event.key === "Enter" || event.key === "Tab") &&
+                    hasSearchFilterSuggestion(query, sourceApps)
+                  ) {
+                    event.preventDefault();
+                    setQuery(applyFirstSearchFilterSuggestion(query, sourceApps));
+                  }
+                }}
                 placeholder={t("searchClipboard")}
                 className="w-full border-0 bg-transparent py-1 pl-7 pr-2 text-[16px] font-semibold tracking-tight text-white/88 outline-none placeholder:text-white/42"
+              />
+              <SearchFilterSuggestions
+                query={query}
+                sourceApps={sourceApps}
+                dark
+                onApply={setQuery}
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
