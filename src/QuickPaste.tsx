@@ -23,6 +23,10 @@ import { cn } from "./lib/utils";
 
 const FAVORITES_CATEGORY_ID = -1;
 
+function isHistoryCategory(category?: Category) {
+  return category?.name.trim().toLowerCase() === "history";
+}
+
 export default function QuickPaste() {
   const { t } = useI18n();
   const { settings } = useSettings();
@@ -47,6 +51,8 @@ export default function QuickPaste() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.classList.add("quick-paste-window");
+    document.body.classList.add("quick-paste-window");
     refresh();
     const unlistenOpen = listen("quick-paste:open", () => {
       setQuery("");
@@ -61,6 +67,8 @@ export default function QuickPaste() {
       refresh();
     });
     return () => {
+      document.documentElement.classList.remove("quick-paste-window");
+      document.body.classList.remove("quick-paste-window");
       unlistenOpen.then((fn) => fn());
       unlistenCleared.then((fn) => fn());
     };
@@ -81,17 +89,27 @@ export default function QuickPaste() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
+        const selectedCategory = categories.find((cat) => cat.id === activeCategory);
+        const shouldFilterCategory =
+          activeCategory &&
+          activeCategory !== FAVORITES_CATEGORY_ID &&
+          !isHistoryCategory(selectedCategory);
+        const shouldLoadAllHistory =
+          activeCategory &&
+          activeCategory !== FAVORITES_CATEGORY_ID &&
+          isHistoryCategory(selectedCategory);
+
         if (query.trim()) {
           const result = await listItems({
             query: query.trim(),
-            categoryId: activeCategory,
+            categoryId: shouldFilterCategory ? activeCategory : undefined,
             limit: 20,
             offset: 0,
           });
           setSearchResults(result.items);
-        } else if (activeCategory && activeCategory !== FAVORITES_CATEGORY_ID) {
+        } else if (shouldFilterCategory || shouldLoadAllHistory) {
           const result = await listItems({
-            categoryId: activeCategory,
+            categoryId: shouldFilterCategory ? activeCategory : undefined,
             limit: 20,
             offset: 0,
           });
@@ -104,7 +122,7 @@ export default function QuickPaste() {
       }
     }, 120);
     return () => clearTimeout(timer);
-  }, [query, activeCategory]);
+  }, [query, activeCategory, categories]);
 
   async function handleSelect(id: string) {
     const item = [...recent, ...favorites, ...searchResults].find(
@@ -118,11 +136,20 @@ export default function QuickPaste() {
   }
 
   const showingFavorites = activeCategory === FAVORITES_CATEGORY_ID;
+  const selectedCategory = categories.find((cat) => cat.id === activeCategory);
+  const historyCategorySelected =
+    Boolean(activeCategory) && isHistoryCategory(selectedCategory);
+  const showingHistory =
+    !showingFavorites && (!activeCategory || isHistoryCategory(selectedCategory));
   const displayItems = query.trim()
     ? searchResults
     : showingFavorites
       ? favorites
-      : activeCategory
+      : historyCategorySelected
+        ? searchResults
+      : showingHistory
+        ? recent
+        : activeCategory
         ? searchResults
         : recent;
 
@@ -159,7 +186,7 @@ export default function QuickPaste() {
   }, [displayItems, selectedIndex]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-white/[0.12] bg-black/48 shadow-[0_26px_70px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.06] backdrop-blur-2xl">
+    <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-black/35 bg-black/58 shadow-[0_26px_70px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
       <ClipboardFeedback variant="dark" position="bottom" compact />
       <div className="px-4 pb-2.5 pt-3.5">
         <div className="flex items-center gap-2">
@@ -205,7 +232,7 @@ export default function QuickPaste() {
               }
               className={cn(
                 "shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
-                activeCategory === cat.id
+                activeCategory === cat.id || (isHistoryCategory(cat) && showingHistory)
                   ? "bg-white text-black"
                   : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
               )}
@@ -222,7 +249,7 @@ export default function QuickPaste() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-1 scrollbar-thin">
         <section>
           <QuickSectionHeader
-            label={query.trim() ? t("results") : showingFavorites ? t("favorites") : activeCategory ? t("category") : t("recent")}
+            label={query.trim() ? t("results") : showingFavorites ? t("favorites") : showingHistory ? t("recent") : t("category")}
             detail={displayItems.length > 0 ? t("shown", { count: displayItems.length }) : undefined}
           />
           <div>

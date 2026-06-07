@@ -288,6 +288,21 @@ html.notch-shelf-dark .scrollbar-thin::-webkit-scrollbar-thumb {
   background: rgb(255 255 255 / 0.14);
 }
 
+html.quick-paste-window,
+html.quick-paste-window body,
+html.quick-paste-window #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+html.quick-paste-window {
+  color-scheme: dark;
+}
+
+html.quick-paste-window body {
+  margin: 0;
+}
+
 .landing-page {
   color-scheme: dark;
   scroll-behavior: smooth;

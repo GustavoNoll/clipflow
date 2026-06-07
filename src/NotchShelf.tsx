@@ -330,7 +330,7 @@ export default function NotchShelf() {
       )}
 
       {!shelfVisible && !settings.notchHoverEnabled && (
-        <div className="flex h-full w-full items-center justify-center bg-black/82 backdrop-blur-xl">
+        <div className="flex h-full w-full items-center justify-center bg-black">
           <CollapsedPeek item={peekItem} />
         </div>
       )}
@@ -338,7 +338,7 @@ export default function NotchShelf() {
       {shelfVisible && (
         <div
           className={cn(
-            "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] border-x border-b border-white/[0.06] bg-black/82 pt-[34px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-2xl",
+            "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]",
             hoverClosing && "notch-expanded-panel-exit",
           )}
         >
