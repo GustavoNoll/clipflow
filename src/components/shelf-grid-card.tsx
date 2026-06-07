@@ -13,19 +13,23 @@ import { ContextMenu, type ContextMenuAction } from "./context-menu";
 interface ShelfGridCardProps {
   item: ClipboardItem;
   variant?: "dark" | "light";
+  selected?: boolean;
   onPaste: (id: string) => void;
   onCopy: (id: string) => void;
   onFavorite: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleSelect?: (id: string) => void;
 }
 
 export function ShelfGridCard({
   item,
   variant = "dark",
+  selected,
   onPaste,
   onCopy,
   onFavorite,
   onDelete,
+  onToggleSelect,
 }: ShelfGridCardProps) {
   const { settings } = useSettings();
   const { t } = useI18n();
@@ -82,7 +86,13 @@ export function ShelfGridCard({
     <>
     <article
       className="group relative h-full cursor-pointer"
-      onClick={() => onCopy(item.id)}
+      onClick={(event) => {
+        if (event.metaKey || event.altKey) {
+          onToggleSelect?.(item.id);
+          return;
+        }
+        onCopy(item.id);
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         setMenu({ x: event.clientX, y: event.clientY });
@@ -94,6 +104,7 @@ export function ShelfGridCard({
           isLight
             ? "border-white/45 bg-white/42 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl hover:border-white/65 hover:bg-white/58"
             : "border-white/[0.10] bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl hover:border-white/[0.16] hover:bg-white/[0.10]",
+          selected && (isLight ? "ring-2 ring-[#5b5fc7]" : "ring-2 ring-white/42"),
         )}
       >
         <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">

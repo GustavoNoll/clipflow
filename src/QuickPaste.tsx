@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
-import { Heart, Search } from "lucide-react";
+import { Copy, Heart, Search } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
@@ -11,6 +11,7 @@ import {
 } from "./components/search-filter-suggestions";
 import {
   copyItemToClipboard,
+  copyItemsToClipboard,
   getContextualRecent,
   listCategories,
   listItems,
@@ -43,6 +44,7 @@ export default function QuickPaste() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sourceApps, setSourceApps] = useState<SourceApp[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -66,6 +68,7 @@ export default function QuickPaste() {
     const unlistenOpen = listen("quick-paste:open", () => {
       setQuery("");
       setActiveCategory(undefined);
+      setSelected(new Set());
       setSelectedIndex(0);
       refresh();
     });
@@ -73,6 +76,7 @@ export default function QuickPaste() {
       setRecent([]);
       setFavorites([]);
       setSearchResults([]);
+      setSelected(new Set());
       refresh();
     });
     return () => {
@@ -82,17 +86,6 @@ export default function QuickPaste() {
       unlistenCleared.then((fn) => fn());
     };
   }, [refresh]);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        void getCurrentWindow().hide();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -144,6 +137,18 @@ export default function QuickPaste() {
     await getCurrentWindow().hide();
   }
 
+  function handleToggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
   const showingFavorites = activeCategory === FAVORITES_CATEGORY_ID;
   const selectedCategory = categories.find((cat) => cat.id === activeCategory);
   const historyCategorySelected =
@@ -162,8 +167,41 @@ export default function QuickPaste() {
         ? searchResults
         : recent;
 
+  const handleBatchCopy = useCallback(async () => {
+    if (selected.size === 0) return;
+    const orderedIds = displayItems
+      .filter((item) => selected.has(item.id))
+      .map((item) => item.id);
+    await copyItemsToClipboard(
+      orderedIds,
+      t("copiedSelected", { count: orderedIds.length }),
+    );
+    await getCurrentWindow().hide();
+  }, [displayItems, selected, t]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void getCurrentWindow().hide();
+      } else if (
+        event.metaKey &&
+        event.key.toLowerCase() === "c" &&
+        selected.size > 0 &&
+        !(event.target instanceof HTMLInputElement) &&
+        !(event.target instanceof HTMLTextAreaElement)
+      ) {
+        event.preventDefault();
+        void handleBatchCopy();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected.size, handleBatchCopy]);
+
   useEffect(() => {
     setSelectedIndex(0);
+    setSelected(new Set());
   }, [query, activeCategory]);
 
   useEffect(() => {
@@ -184,6 +222,10 @@ export default function QuickPaste() {
         setSelectedIndex((index) => Math.max(index - 1, 0));
       } else if (event.key === "Enter") {
         event.preventDefault();
+        if (selected.size > 0) {
+          void handleBatchCopy();
+          return;
+        }
         const item = displayItems[selectedIndex];
         if (item) {
           void handleSelect(item.id);
@@ -193,7 +235,7 @@ export default function QuickPaste() {
 
     window.addEventListener("keydown", onNavigation);
     return () => window.removeEventListener("keydown", onNavigation);
-  }, [displayItems, query, selectedIndex, sourceApps]);
+  }, [displayItems, query, selected.size, selectedIndex, sourceApps, handleBatchCopy]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-black/35 bg-black/58 shadow-[0_26px_70px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
@@ -307,7 +349,9 @@ export default function QuickPaste() {
                       key={item.id}
                       item={item}
                       active={index === selectedIndex}
+                      selected={selected.has(item.id)}
                       onSelect={handleSelect}
+                      onToggleSelect={handleToggleSelect}
                     />
                   ))}
                 </div>
@@ -318,8 +362,19 @@ export default function QuickPaste() {
 
       <div className="border-t border-white/[0.08] bg-white/[0.055] px-4 py-2 backdrop-blur-xl">
         <div className="flex items-center justify-center gap-2 text-[10px] font-medium text-white/38">
-          <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("recentShortcut")}</span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("clickToCopy")}</span>
+          {selected.size > 0 ? (
+            <button
+              type="button"
+              onClick={handleBatchCopy}
+              className="rounded-full bg-white px-2.5 py-1 font-semibold text-black"
+            >
+              <Copy size={11} className="mr-1 inline" />
+              {t("copySelected")}
+            </button>
+          ) : (
+            <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("recentShortcut")}</span>
+          )}
+          <span className="rounded-full bg-white/[0.06] px-2 py-1">{selected.size > 0 ? "⌘C" : t("clickToCopy")}</span>
           <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("escCloses")}</span>
         </div>
       </div>
@@ -354,11 +409,15 @@ function QuickSectionHeader({
 function QuickRow({
   item,
   active,
+  selected,
   onSelect,
+  onToggleSelect,
 }: {
   item: ClipboardItem;
   active: boolean;
+  selected: boolean;
   onSelect: (id: string) => void;
+  onToggleSelect: (id: string) => void;
 }) {
   const { settings } = useSettings();
   const appLabel = getSourceAppLabel(item);
@@ -371,14 +430,26 @@ function QuickRow({
   return (
     <button
       type="button"
-      onClick={() => onSelect(item.id)}
+      onClick={(event) => {
+        if (event.metaKey || event.altKey) {
+          onToggleSelect(item.id);
+          return;
+        }
+        onSelect(item.id);
+      }}
       className={cn(
         "group relative flex h-[112px] min-w-0 flex-col overflow-hidden rounded-[11px] border bg-white/[0.07] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl transition-colors hover:border-white/[0.16] hover:bg-white/[0.10] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/18",
         active
           ? "border-white/30 bg-white/[0.105] ring-2 ring-white/12"
           : "border-white/[0.07]",
+        selected && "border-white/50 ring-2 ring-white/38",
       )}
     >
+      {selected && (
+        <span className="absolute right-2 top-2 z-10 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-black shadow">
+          ✓
+        </span>
+      )}
       {isImage ? (
         <img
           src={item.thumbnail}
