@@ -134,6 +134,27 @@ export async function copyItemToClipboard(id: string, message?: string): Promise
   );
 }
 
+export async function copyItemsToClipboard(ids: string[], message?: string): Promise<void> {
+  try {
+    await invoke("copy_items_to_clipboard", { ids });
+  } catch (error) {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail:
+          typeof error === "string" && error.includes("Sensitive item locked")
+            ? "Unlock required to copy sensitive items"
+            : "Bulk copy failed",
+      }),
+    );
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("clipflow:clipboard-feedback", {
+      detail: message ?? "Copied selected clips",
+    }),
+  );
+}
+
 export async function copyTextToClipboard(text: string, message?: string): Promise<void> {
   await invoke("copy_text_to_clipboard", { text });
   window.dispatchEvent(

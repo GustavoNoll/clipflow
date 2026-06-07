@@ -1,6 +1,6 @@
 [package]
 name = "clipflow"
-version = "0.1.7"
+version = "0.1.8"
 description = "Clipboard Manager for macOS"
 authors = ["gustavonoll"]
 edition = "2021"

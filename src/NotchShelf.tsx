@@ -384,6 +384,18 @@ export default function NotchShelf() {
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {update?.version && (
+                <button
+                  type="button"
+                  onClick={handleOpenLibrary}
+                  className="flex h-9 items-center gap-1.5 rounded-full bg-amber-300 px-3 text-[12px] font-bold text-black shadow-[0_8px_24px_rgba(251,191,36,0.22)] ring-1 ring-amber-100/60 transition-transform hover:scale-[1.02]"
+                  aria-label={t("versionAvailable", { version: update.version })}
+                  title={t("versionAvailable", { version: update.version })}
+                >
+                  <CircleArrowUp size={14} />
+                  {t("updateAvailable")}
+                </button>
+              )}
               <ActionButton icon={<Star size={16} fill="currentColor" />} label={t("favorites")} onClick={selectFavorites} active={favoritesOnly} />
             </div>
           </div>
@@ -548,11 +560,12 @@ function NotchHoverRail({
               event.stopPropagation();
               onOpenLibrary?.();
             }}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/15 transition-colors hover:bg-amber-400/25 hover:text-amber-200"
+            className="flex h-6 items-center gap-1 rounded-full bg-amber-300 px-2 text-[10px] font-bold text-black ring-1 ring-amber-100/60 transition-colors hover:bg-amber-200"
             aria-label={t("versionAvailable", { version: updateVersion })}
             title={t("versionAvailable", { version: updateVersion })}
           >
             <CircleArrowUp size={13} />
+            <span>{updateVersion}</span>
           </button>
         )}
         {onOpenLibrary && (

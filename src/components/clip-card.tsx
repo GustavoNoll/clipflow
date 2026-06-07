@@ -124,7 +124,13 @@ export function ClipCard({
         "group panel flex flex-col p-3.5 transition-colors hover:bg-[var(--color-surface-hover)]",
         selected && "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]",
       )}
-      onClick={() => onCopy?.(item.id)}
+      onClick={(event) => {
+        if (event.metaKey || event.altKey) {
+          onToggleSelect?.(item.id);
+          return;
+        }
+        onCopy?.(item.id);
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         setMenu({ x: event.clientX, y: event.clientY });

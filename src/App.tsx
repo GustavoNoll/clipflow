@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const SIDEBAR_STORAGE_KEY = "clipflow.sidebarOpen";
 import {
+  CircleArrowUp,
   ClipboardList,
+  Copy,
   FolderOpen,
   Heart,
   MousePointer2,
@@ -27,6 +29,7 @@ import { ShortcutsReference } from "./components/shortcuts-reference";
 import {
   clearHistory,
   copyItemToClipboard,
+  copyItemsToClipboard,
   createCategory,
   deleteItem,
   deleteItems,
@@ -137,6 +140,17 @@ export default function App() {
     refreshMeta();
   }, [selected, refreshMeta]);
 
+  const handleBatchCopy = useCallback(async () => {
+    if (selected.size === 0) return;
+    const orderedIds = items
+      .filter((item) => selected.has(item.id))
+      .map((item) => item.id);
+    await copyItemsToClipboard(
+      orderedIds,
+      t("copiedSelected", { count: orderedIds.length }),
+    );
+  }, [items, selected, t]);
+
   const handleClearHistory = useCallback(async () => {
     await clearHistory();
     setItems([]);
@@ -231,6 +245,18 @@ export default function App() {
         return;
       }
 
+      if (
+        meta &&
+        event.key.toLowerCase() === "c" &&
+        selected.size > 0 &&
+        !(event.target instanceof HTMLInputElement) &&
+        !(event.target instanceof HTMLTextAreaElement)
+      ) {
+        event.preventDefault();
+        void handleBatchCopy();
+        return;
+      }
+
       if (event.key === "Escape") {
         if (settingsOpen) {
           event.preventDefault();
@@ -252,7 +278,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selected.size, settingsOpen, handleBatchDelete]);
+  }, [selected.size, settingsOpen, handleBatchCopy, handleBatchDelete]);
 
   useEffect(() => {
     if (!loaderRef.current || !hasMore) return;
@@ -433,6 +459,10 @@ export default function App() {
               <span className="text-label px-2">
                 {t("selectedCount", { count: selected.size })}
               </span>
+              <button type="button" onClick={handleBatchCopy} className="btn-ghost">
+                <Copy size={15} />
+                {t("copySelected")}
+              </button>
               <button type="button" onClick={handleBatchFavorite} className="btn-ghost">
                 <Heart size={15} />
                 {t("favoriteSelected")}
@@ -454,10 +484,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="btn-ghost border border-amber-400/25 bg-amber-400/10 text-amber-600 hover:bg-amber-400/15"
+              className="btn-ghost border border-amber-400/30 bg-amber-400/12 text-amber-700 shadow-[0_8px_22px_rgba(251,191,36,0.14)] hover:bg-amber-400/18"
               title={t("versionAvailable", { version: update.version })}
             >
-              {t("versionAvailable", { version: update.version })}
+              <CircleArrowUp size={15} />
+              {t("updateAvailable")}
             </button>
           )}
           <button type="button" onClick={handleClearHistory} className="btn-ghost">
@@ -466,10 +497,17 @@ export default function App() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="btn-ghost h-9 w-9 p-0"
+            className={cn(
+              "btn-ghost relative h-9 w-9 p-0",
+              update && "text-amber-700 ring-1 ring-amber-400/25",
+            )}
             aria-label={t("openSettings")}
+            title={update ? t("versionAvailable", { version: update.version }) : t("openSettings")}
           >
             <Settings size={16} />
+            {update && (
+              <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-[var(--color-surface)]" />
+            )}
           </button>
         </div>
       </header>

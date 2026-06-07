@@ -296,6 +296,51 @@ pub fn copy_item_to_clipboard(
 }
 
 #[tauri::command]
+pub fn copy_items_to_clipboard(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<usize, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+
+    let (items, hide_sensitive_content) = {
+        let db = state.db.lock();
+        let items = ids
+            .iter()
+            .map(|id| db.get_item(id).map_err(|e| e.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let hide_sensitive_content = db
+            .get_settings()
+            .map(|settings| settings.hide_sensitive_content)
+            .unwrap_or(true);
+        (items, hide_sensitive_content)
+    };
+
+    if let Some(item) = items
+        .iter()
+        .find(|item| hide_sensitive_content && looks_sensitive(&item.content))
+    {
+        authorize_sensitive_item(
+            &item.content,
+            hide_sensitive_content,
+            "Copy multiple sensitive clipboard items in ClipFlow.",
+        )?;
+    }
+
+    state.monitor.suppress_next();
+    let text = items
+        .iter()
+        .map(|item| item.content.trim())
+        .filter(|content| !content.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.set_text(text).map_err(|e| e.to_string())?;
+    Ok(items.len())
+}
+
+#[tauri::command]
 pub fn copy_text_to_clipboard(state: State<'_, AppState>, text: String) -> Result<(), String> {
     state.monitor.suppress_next();
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;

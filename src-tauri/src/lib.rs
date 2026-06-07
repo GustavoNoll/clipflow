@@ -149,6 +149,7 @@ pub fn run() {
             commands::delete_category,
             commands::list_source_apps,
             commands::copy_item_to_clipboard,
+            commands::copy_items_to_clipboard,
             commands::copy_text_to_clipboard,
             commands::paste_item_by_id,
             commands::paste_recent_by_index,
