@@ -72,43 +72,51 @@ export function ClipCard({
         void action.run();
       },
     }))),
-    {
-      id: "favorite",
-      label: item.isFavorite ? t("removeFavorite") : t("addFavorite"),
-      onSelect: () => onFavorite?.(item.id),
-    },
-    {
-      id: "pin",
-      label: item.isPinned ? t("unpin") : t("pin"),
-      onSelect: () => onPin?.(item.id, !item.isPinned),
-    },
-    ...Array.from({ length: 10 }, (_, shortcut) => ({
-      id: `pin-shortcut-${shortcut}`,
-      label:
-        item.pinShortcut === shortcut
-          ? `${t("removePinShortcut")} ⌃⌘${shortcut}`
-          : `${t("pinShortcut")} ⌃⌘${shortcut}`,
-      onSelect: () =>
-        onSetPinShortcut?.(
-          item.id,
-          item.pinShortcut === shortcut ? null : shortcut,
-        ),
-    })),
-    ...(item.sourceApp
+    ...(onFavorite
+      ? [{
+          id: "favorite",
+          label: item.isFavorite ? t("removeFavorite") : t("addFavorite"),
+          onSelect: () => onFavorite(item.id),
+        }]
+      : []),
+    ...(onPin
+      ? [{
+          id: "pin",
+          label: item.isPinned ? t("unpin") : t("pin"),
+          onSelect: () => onPin(item.id, !item.isPinned),
+        }]
+      : []),
+    ...(onSetPinShortcut
+      ? Array.from({ length: 10 }, (_, shortcut) => ({
+          id: `pin-shortcut-${shortcut}`,
+          label:
+            item.pinShortcut === shortcut
+              ? `${t("removePinShortcut")} ⌃⌘${shortcut}`
+              : `${t("pinShortcut")} ⌃⌘${shortcut}`,
+          onSelect: () =>
+            onSetPinShortcut(
+              item.id,
+              item.pinShortcut === shortcut ? null : shortcut,
+            ),
+        }))
+      : []),
+    ...(onIgnoreApp && item.sourceApp
       ? [
           {
             id: "ignore-app",
             label: t("ignoreAppAction", { app: item.sourceApp }),
-            onSelect: () => onIgnoreApp?.(item.sourceApp!),
+            onSelect: () => onIgnoreApp(item.sourceApp!),
           },
         ]
       : []),
-    {
-      id: "delete",
-      label: t("delete"),
-      destructive: true,
-      onSelect: () => onDelete?.(item.id),
-    },
+    ...(onDelete
+      ? [{
+          id: "delete",
+          label: t("delete"),
+          destructive: true,
+          onSelect: () => onDelete(item.id),
+        }]
+      : []),
   ];
 
   return (
@@ -167,49 +175,55 @@ export function ClipCard({
               ⌃⌘{item.pinShortcut}
             </span>
           )}
-          <button
-            type="button"
-            className={cn(
-              "rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)]",
-              item.isPinned && "text-[var(--color-accent)] opacity-100",
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPin?.(item.id, !item.isPinned);
-            }}
-            aria-label={item.isPinned ? t("unpin") : t("pin")}
-          >
-            {item.pinShortcut !== null && item.pinShortcut !== undefined ? (
-              <Keyboard size={14} />
-            ) : (
-              <Pin size={14} fill={item.isPinned ? "currentColor" : "none"} />
-            )}
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)]",
-              item.isFavorite && "text-amber-500 opacity-100",
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onFavorite?.(item.id);
-            }}
-            aria-label="Toggle favorite"
-          >
-            <Star size={14} fill={item.isFavorite ? "currentColor" : "none"} />
-          </button>
-          <button
-            type="button"
-            className="rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.(item.id);
-            }}
-            aria-label="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
+          {onPin && (
+            <button
+              type="button"
+              className={cn(
+                "rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)]",
+                item.isPinned && "text-[var(--color-accent)] opacity-100",
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPin(item.id, !item.isPinned);
+              }}
+              aria-label={item.isPinned ? t("unpin") : t("pin")}
+            >
+              {item.pinShortcut !== null && item.pinShortcut !== undefined ? (
+                <Keyboard size={14} />
+              ) : (
+                <Pin size={14} fill={item.isPinned ? "currentColor" : "none"} />
+              )}
+            </button>
+          )}
+          {onFavorite && (
+            <button
+              type="button"
+              className={cn(
+                "rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)]",
+                item.isFavorite && "text-amber-500 opacity-100",
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFavorite(item.id);
+              }}
+              aria-label="Toggle favorite"
+            >
+              <Star size={14} fill={item.isFavorite ? "currentColor" : "none"} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className="rounded-[6px] p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item.id);
+              }}
+              aria-label="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </div>
 

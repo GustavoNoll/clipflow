@@ -102,6 +102,7 @@ const messages = {
     check: "Check",
     installing: "Installing…",
     install: "Install",
+    installUpdateConfirm: "Install ClipFlow v{version} now? The app will restart.",
     updateEndpointDescription: "Requires a signed release JSON at the configured update endpoint.",
     demoContent: "Demo content",
     addDemoContentDescription:
@@ -275,6 +276,7 @@ const messages = {
     check: "Verificar",
     installing: "Instalando…",
     install: "Instalar",
+    installUpdateConfirm: "Instalar o ClipFlow v{version} agora? O app vai reiniciar.",
     updateEndpointDescription: "Exige um JSON de release assinado no endpoint de atualização configurado.",
     demoContent: "Conteúdo demo",
     addDemoContentDescription:
@@ -448,6 +450,7 @@ const messages = {
     check: "Verificar",
     installing: "Instalando…",
     install: "Instalar",
+    installUpdateConfirm: "¿Instalar ClipFlow v{version} ahora? La app se reiniciará.",
     updateEndpointDescription: "Requiere un JSON de release firmado en el endpoint de actualización configurado.",
     demoContent: "Contenido demo",
     addDemoContentDescription:

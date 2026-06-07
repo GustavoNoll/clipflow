@@ -159,7 +159,7 @@ html.notch-shelf-dark .notch-pill {
 }
 
 .notch-rail-enter,
-.notch-search-enter,
+.notch-actions-enter,
 .notch-bench-enter,
 .notch-categories-enter,
 .notch-groups-enter {
@@ -167,7 +167,7 @@ html.notch-shelf-dark .notch-pill {
 }
 
 .notch-expanded-panel-exit .notch-rail-enter,
-.notch-expanded-panel-exit .notch-search-enter,
+.notch-expanded-panel-exit .notch-actions-enter,
 .notch-expanded-panel-exit .notch-bench-enter,
 .notch-expanded-panel-exit .notch-categories-enter,
 .notch-expanded-panel-exit .notch-groups-enter,
@@ -180,7 +180,7 @@ html.notch-shelf-dark .notch-pill {
   animation-delay: 240ms;
 }
 
-.notch-search-enter {
+.notch-actions-enter {
   animation-delay: 300ms;
 }
 
@@ -295,13 +295,13 @@ html.notch-shelf-dark .notch-pill {
   .notch-expanded-panel,
   .notch-expanded-panel-exit,
   .notch-rail-enter,
-  .notch-search-enter,
+  .notch-actions-enter,
   .notch-categories-enter,
   .notch-groups-enter,
   .notch-item-card,
   .notch-copy-feedback,
   .notch-expanded-panel-exit .notch-rail-enter,
-  .notch-expanded-panel-exit .notch-search-enter,
+  .notch-expanded-panel-exit .notch-actions-enter,
   .notch-expanded-panel-exit .notch-categories-enter,
   .notch-expanded-panel-exit .notch-groups-enter,
   .notch-expanded-panel-exit .notch-item-card {

@@ -6,6 +6,7 @@ import {
   CircleArrowUp,
   ClipboardList,
   Copy,
+  Download,
   FolderOpen,
   Heart,
   MousePointer2,
@@ -29,6 +30,8 @@ import {
 import { ShortcutsReference } from "./components/shortcuts-reference";
 import {
   clearHistory,
+  copyDownloadPathsToClipboard,
+  copyDownloadToClipboard,
   copyItemToClipboard,
   copyItemsToClipboard,
   createCategory,
@@ -36,7 +39,9 @@ import {
   deleteItems,
   listCategories,
   listItems,
+  listRecentDownloads,
   listSourceApps,
+  pasteDownloadByPath,
   pasteItemById,
   seedDemoData,
   setItemsFavorite,
@@ -50,7 +55,7 @@ import { useUpdateStatus } from "./lib/update-status-context";
 import type { Category, ClipboardItem, ItemType, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
-type FilterView = "all" | "favorites" | "category" | "app" | "type";
+type FilterView = "all" | "favorites" | "downloads" | "category" | "app" | "type";
 
 export default function App() {
   const { settings, updateSettings, loaded } = useSettings();
@@ -91,6 +96,20 @@ export default function App() {
       setLoading(true);
       const nextOffset = reset ? 0 : offset;
       try {
+        if (view === "downloads") {
+          const downloads = await listRecentDownloads(80);
+          const normalizedQuery = debouncedQuery.trim().toLowerCase();
+          const filtered = normalizedQuery
+            ? downloads.filter((item) =>
+                `${item.preview} ${item.content}`.toLowerCase().includes(normalizedQuery),
+              )
+            : downloads;
+          setItems(filtered);
+          setTotal(filtered.length);
+          setHasMore(false);
+          setOffset(filtered.length);
+          return;
+        }
         const result = await listItems({
           query: debouncedQuery || undefined,
           categoryId: view === "category" ? categoryId : undefined,
@@ -143,11 +162,13 @@ export default function App() {
 
   const handleBatchCopy = useCallback(async () => {
     if (selected.size === 0) return;
-    const orderedIds = items
-      .filter((item) => selected.has(item.id))
-      .map((item) => item.id);
-    await copyItemsToClipboard(orderedIds);
-  }, [items, selected, t]);
+    const orderedItems = items.filter((item) => selected.has(item.id));
+    if (view === "downloads") {
+      await copyDownloadPathsToClipboard(orderedItems.map((item) => item.content));
+      return;
+    }
+    await copyItemsToClipboard(orderedItems.map((item) => item.id));
+  }, [items, selected, view]);
 
   const handleClearHistory = useCallback(async () => {
     await clearHistory();
@@ -264,6 +285,7 @@ export default function App() {
       }
 
       if (
+        view !== "downloads" &&
         (event.key === "Delete" || (event.key === "Backspace" && meta)) &&
         selected.size > 0 &&
         !(event.target instanceof HTMLInputElement) &&
@@ -276,7 +298,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selected.size, settingsOpen, handleBatchCopy, handleBatchDelete]);
+  }, [selected.size, settingsOpen, view, handleBatchCopy, handleBatchDelete]);
 
   useEffect(() => {
     if (!loaderRef.current || !hasMore) return;
@@ -373,11 +395,20 @@ export default function App() {
   }
 
   async function handlePaste(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (view === "downloads" && item) {
+      await pasteDownloadByPath(item.content);
+      return;
+    }
     await pasteItemById(id);
   }
 
   async function handleCopy(id: string) {
     const item = items.find((candidate) => candidate.id === id);
+    if (view === "downloads" && item) {
+      await copyDownloadToClipboard(item.content, t("copiedToClipboard"));
+      return;
+    }
     await copyItemToClipboard(
       id,
       item ? t("copiedToClipboard") : undefined,
@@ -462,21 +493,25 @@ export default function App() {
                 <Copy size={15} />
                 {t("copySelected")}
               </button>
-              <button type="button" onClick={handleBatchFavorite} className="btn-ghost">
-                <Heart size={15} />
-                {t("favoriteSelected")}
-              </button>
-              <button type="button" onClick={handleBatchPin} className="btn-ghost">
-                {t("pinSelected")}
-              </button>
-              <button
-                type="button"
-                onClick={handleBatchDelete}
-                className="btn-ghost text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]"
-              >
-                <Trash2 size={15} />
-                {t("deleteCount", { count: selected.size })}
-              </button>
+              {view !== "downloads" && (
+                <>
+                  <button type="button" onClick={handleBatchFavorite} className="btn-ghost">
+                    <Heart size={15} />
+                    {t("favoriteSelected")}
+                  </button>
+                  <button type="button" onClick={handleBatchPin} className="btn-ghost">
+                    {t("pinSelected")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBatchDelete}
+                    className="btn-ghost text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]"
+                  >
+                    <Trash2 size={15} />
+                    {t("deleteCount", { count: selected.size })}
+                  </button>
+                </>
+              )}
             </>
           )}
           {update && (
@@ -530,6 +565,18 @@ export default function App() {
               icon={<Heart size={15} />}
               label={t("favorites")}
               onClick={() => setView("favorites")}
+            />
+            <SidebarButton
+              active={view === "downloads"}
+              icon={<Download size={15} />}
+              label={t("downloads")}
+              count={view === "downloads" ? total : undefined}
+              onClick={() => {
+                setView("downloads");
+                setCategoryId(undefined);
+                setSourceApp(undefined);
+                setItemType(undefined);
+              }}
             />
           </nav>
 
@@ -650,13 +697,13 @@ export default function App() {
                     key={item.id}
                     item={item}
                     selected={selected.has(item.id)}
-                    onFavorite={handleFavorite}
-                    onDelete={handleDelete}
+                    onFavorite={view === "downloads" ? undefined : handleFavorite}
+                    onDelete={view === "downloads" ? undefined : handleDelete}
                     onPaste={handlePaste}
                     onCopy={handleCopy}
                     onIgnoreApp={handleIgnoreApp}
-                    onPin={handlePin}
-                    onSetPinShortcut={handlePinShortcut}
+                    onPin={view === "downloads" ? undefined : handlePin}
+                    onSetPinShortcut={view === "downloads" ? undefined : handlePinShortcut}
                     onToggleSelect={handleToggleSelect}
                   />
                 ))}

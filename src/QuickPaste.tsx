@@ -326,6 +326,23 @@ export default function QuickPaste() {
           >
             ★
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveCategory((prev) =>
+                prev === DOWNLOADS_CATEGORY_ID ? undefined : DOWNLOADS_CATEGORY_ID,
+              )
+            }
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
+              showingDownloads
+                ? "bg-white text-black"
+                : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
+            )}
+          >
+            <Download size={12} />
+            {t("downloads")}
+          </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -347,23 +364,6 @@ export default function QuickPaste() {
               )}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() =>
-              setActiveCategory((prev) =>
-                prev === DOWNLOADS_CATEGORY_ID ? undefined : DOWNLOADS_CATEGORY_ID,
-              )
-            }
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
-              showingDownloads
-                ? "bg-white text-black"
-                : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
-            )}
-          >
-            <Download size={12} />
-            {t("downloads")}
-          </button>
         </div>
       </div>
 

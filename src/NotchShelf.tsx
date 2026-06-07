@@ -8,16 +8,10 @@ import {
   Download,
   Grid3X3,
   Plus,
-  Search,
   Star,
   X,
 } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
-import {
-  applyFirstSearchFilterSuggestion,
-  hasSearchFilterSuggestion,
-  SearchFilterSuggestions,
-} from "./components/search-filter-suggestions";
 import { ShelfGridCard } from "./components/shelf-grid-card";
 import {
   createCategory,
@@ -31,7 +25,6 @@ import {
   listCategories,
   listItems,
   listRecentDownloads,
-  listSourceApps,
   openLibraryWindow,
   pasteDownloadByPath,
   pasteItemById,
@@ -45,7 +38,7 @@ import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
 import { translateCategoryName, useI18n } from "./lib/i18n";
 import { useUpdateStatus } from "./lib/update-status-context";
-import type { Category, ClipboardItem, SourceApp } from "./lib/types";
+import type { Category, ClipboardItem } from "./lib/types";
 import { cn } from "./lib/utils";
 
 interface NotchCopyFeedbackPayload {
@@ -58,12 +51,9 @@ interface NotchCopyFeedbackPayload {
 export default function NotchShelf() {
   const { settings } = useSettings();
   const { t } = useI18n();
-  const { update } = useUpdateStatus();
+  const { update, installing: installingUpdate, installNow } = useUpdateStatus();
   const [expanded, setExpanded] = useState(false);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [sourceApps, setSourceApps] = useState<SourceApp[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [downloadsOnly, setDownloadsOnly] = useState(false);
@@ -79,7 +69,9 @@ export default function NotchShelf() {
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draggedItemRef = useRef<ClipboardItem | null>(null);
+  const visibleItemsRef = useRef<ClipboardItem[]>([]);
   const shelfOpen = expanded || notchHovered;
   const shelfVisible = shelfOpen || hoverClosing;
   const itemGroups = useMemo(() => groupItemsByDate(items), [items]);
@@ -90,9 +82,8 @@ export default function NotchShelf() {
   }, []);
 
   const refreshMeta = useCallback(async () => {
-    const [cats, apps] = await Promise.all([listCategories(), listSourceApps()]);
+    const cats = await listCategories();
     setCategories(cats);
-    setSourceApps(apps);
   }, []);
 
   const loadItems = useCallback(async () => {
@@ -100,18 +91,10 @@ export default function NotchShelf() {
     try {
       if (downloadsOnly) {
         const downloads = await listRecentDownloads(18);
-        const normalizedQuery = debouncedQuery.trim().toLowerCase();
-        setItems(
-          normalizedQuery
-            ? downloads.filter((item) =>
-                `${item.preview} ${item.content}`.toLowerCase().includes(normalizedQuery),
-              )
-            : downloads,
-        );
+        setItems(downloads);
         return;
       }
       const result = await listItems({
-        query: debouncedQuery || undefined,
         categoryId: favoritesOnly ? undefined : activeCategory,
         favoritesOnly,
         limit: 18,
@@ -121,7 +104,7 @@ export default function NotchShelf() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, activeCategory, favoritesOnly, downloadsOnly]);
+  }, [activeCategory, favoritesOnly, downloadsOnly]);
 
   const collapse = useCallback(async () => {
     setExpanded(false);
@@ -165,8 +148,31 @@ export default function NotchShelf() {
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
       if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
       if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
+      if (dragCleanupTimerRef.current) clearTimeout(dragCleanupTimerRef.current);
     };
   }, [refreshPeek]);
+
+  useEffect(() => {
+    visibleItemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    function cleanupDragState() {
+      if (dragCleanupTimerRef.current) {
+        clearTimeout(dragCleanupTimerRef.current);
+        dragCleanupTimerRef.current = null;
+      }
+      draggedItemRef.current = null;
+      setBenchDropActive(false);
+    }
+
+    window.addEventListener("dragend", cleanupDragState);
+    window.addEventListener("drop", cleanupDragState);
+    return () => {
+      window.removeEventListener("dragend", cleanupDragState);
+      window.removeEventListener("drop", cleanupDragState);
+    };
+  }, []);
 
   useEffect(() => {
     const unlistenCopied = listen<NotchCopyFeedbackPayload>(
@@ -187,17 +193,12 @@ export default function NotchShelf() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query), 120);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  useEffect(() => {
     setSelected(new Set());
-  }, [query, activeCategory, favoritesOnly, downloadsOnly]);
+  }, [activeCategory, favoritesOnly, downloadsOnly]);
 
   useEffect(() => {
     if (shelfOpen) loadItems();
-  }, [debouncedQuery, activeCategory, favoritesOnly, downloadsOnly, shelfOpen, loadItems]);
+  }, [activeCategory, favoritesOnly, downloadsOnly, shelfOpen, loadItems]);
 
   useEffect(() => {
     refreshMeta();
@@ -284,8 +285,6 @@ export default function NotchShelf() {
     const unlistenOpen = listen("notch-shelf:open", () => {
       setExpanded(true);
       setSelected(new Set());
-      setQuery("");
-      setDebouncedQuery("");
       refreshMeta();
       loadItems();
     });
@@ -387,6 +386,10 @@ export default function NotchShelf() {
   }
 
   function handleCardDragStart(item: ClipboardItem, event: DragEvent<HTMLElement>) {
+    if (dragCleanupTimerRef.current) {
+      clearTimeout(dragCleanupTimerRef.current);
+      dragCleanupTimerRef.current = null;
+    }
     draggedItemRef.current = item;
     setBenchDropActive(true);
     event.dataTransfer.effectAllowed = "copy";
@@ -395,8 +398,12 @@ export default function NotchShelf() {
   }
 
   function handleCardDragEnd() {
-    draggedItemRef.current = null;
-    setBenchDropActive(false);
+    if (dragCleanupTimerRef.current) clearTimeout(dragCleanupTimerRef.current);
+    dragCleanupTimerRef.current = setTimeout(() => {
+      draggedItemRef.current = null;
+      setBenchDropActive(false);
+      dragCleanupTimerRef.current = null;
+    }, 120);
   }
 
   function handleBenchDragOver(event: DragEvent<HTMLElement>) {
@@ -408,7 +415,16 @@ export default function NotchShelf() {
 
   function handleBenchDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
-    const item = draggedItemRef.current;
+    event.stopPropagation();
+    const draggedId = event.dataTransfer.getData("application/x-clipflow-item-id");
+    const item =
+      draggedItemRef.current ??
+      visibleItemsRef.current.find((candidate) => candidate.id === draggedId) ??
+      benchItems.find((candidate) => candidate.id === draggedId);
+    if (dragCleanupTimerRef.current) {
+      clearTimeout(dragCleanupTimerRef.current);
+      dragCleanupTimerRef.current = null;
+    }
     draggedItemRef.current = null;
     setBenchDropActive(false);
     if (item) addBenchItem(item);
@@ -476,6 +492,15 @@ export default function NotchShelf() {
 
   async function handleOpenLibrary() {
     await openLibraryWindow();
+  }
+
+  async function handleInstallUpdate() {
+    if (!update?.version || installingUpdate) return;
+    const confirmed = window.confirm(
+      t("installUpdateConfirm", { version: update.version }),
+    );
+    if (!confirmed) return;
+    await installNow();
   }
 
   async function handleNotchHover(hovered: boolean) {
@@ -554,63 +579,28 @@ export default function NotchShelf() {
             item={peekItem}
             onOpenLibrary={handleOpenLibrary}
             updateVersion={update?.version}
+            installingUpdate={installingUpdate}
+            onInstallUpdate={handleInstallUpdate}
             className="notch-rail-enter"
           />
 
-          <div className="notch-search-enter flex items-center justify-between gap-3 px-6 pt-3 pb-2.5">
-            <div className="relative w-full max-w-[420px] rounded-full bg-white/[0.045] px-3 ring-1 ring-white/[0.06] backdrop-blur-xl">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/38" />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    (event.key === "Enter" || event.key === "Tab") &&
-                    hasSearchFilterSuggestion(query, sourceApps)
-                  ) {
-                    event.preventDefault();
-                    setQuery(applyFirstSearchFilterSuggestion(query, sourceApps));
-                  }
+          <div className="notch-actions-enter flex min-h-10 items-center justify-end gap-2 px-6 pt-3 pb-2.5">
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void handleBatchCopy();
                 }}
-                placeholder={t("searchClipboard")}
-                className="w-full border-0 bg-transparent py-1 pl-7 pr-2 text-[16px] font-semibold tracking-tight text-white/88 outline-none placeholder:text-white/42"
-              />
-              <SearchFilterSuggestions
-                query={query}
-                sourceApps={sourceApps}
-                dark
-                onApply={setQuery}
-              />
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {selected.size > 0 && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void handleBatchCopy();
-                  }}
-                  className="flex h-9 items-center gap-1.5 rounded-full bg-white px-3 text-[12px] font-bold text-black shadow-[0_8px_24px_rgba(255,255,255,0.16)] transition-transform hover:scale-[1.02]"
-                  title="⌘C / Ctrl+C"
-                >
-                  <Copy size={14} />
-                  {t("copySelected")}
-                </button>
-              )}
-              {update?.version && (
-                <span
-                  className="flex h-9 items-center gap-1.5 rounded-full bg-amber-300 px-3 text-[12px] font-bold text-black shadow-[0_8px_24px_rgba(251,191,36,0.22)] ring-1 ring-amber-100/60 transition-transform hover:scale-[1.02]"
-                  aria-label={t("versionAvailable", { version: update.version })}
-                  title={t("versionAvailable", { version: update.version })}
-                >
-                  <CircleArrowUp size={14} />
-                  {t("updateAvailable")}
-                </span>
-              )}
-              <ActionButton icon={<Star size={16} fill="currentColor" />} label={t("favorites")} onClick={selectFavorites} active={favoritesOnly} />
-            </div>
+                className="flex h-9 items-center gap-1.5 rounded-full bg-white px-3 text-[12px] font-bold text-black shadow-[0_8px_24px_rgba(255,255,255,0.16)] transition-transform hover:scale-[1.02]"
+                title="⌘C / Ctrl+C"
+              >
+                <Copy size={14} />
+                {t("copySelected")}
+              </button>
+            )}
+            <ActionButton icon={<Star size={16} fill="currentColor" />} label={t("favorites")} onClick={selectFavorites} active={favoritesOnly} />
           </div>
 
           {(benchItems.length > 0 || benchDropActive) && (
@@ -884,12 +874,16 @@ function NotchHoverRail({
   onOpen,
   onOpenLibrary,
   updateVersion,
+  installingUpdate,
+  onInstallUpdate,
   className,
 }: {
   item: ClipboardItem | null;
   onOpen?: () => void;
   onOpenLibrary?: () => void;
   updateVersion?: string;
+  installingUpdate?: boolean;
+  onInstallUpdate?: () => void;
   className?: string;
 }) {
   const { t } = useI18n();
@@ -921,14 +915,21 @@ function NotchHoverRail({
       <div aria-hidden="true" />
       <div className="flex justify-end gap-1.5">
         {updateVersion && (
-          <span
-            className="flex h-6 items-center gap-1 rounded-full bg-amber-300 px-2 text-[10px] font-bold text-black ring-1 ring-amber-100/60 transition-colors hover:bg-amber-200"
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onInstallUpdate?.();
+            }}
+            disabled={installingUpdate}
+            className="flex h-6 items-center gap-1 rounded-full bg-amber-300 px-2 text-[10px] font-bold text-black ring-1 ring-amber-100/60 transition-colors hover:bg-amber-200 disabled:cursor-default disabled:opacity-70"
             aria-label={t("versionAvailable", { version: updateVersion })}
             title={t("versionAvailable", { version: updateVersion })}
           >
             <CircleArrowUp size={13} />
-            <span>{updateVersion}</span>
-          </span>
+            <span>{installingUpdate ? t("installing") : updateVersion}</span>
+          </button>
         )}
         {onOpenLibrary && (
           <button
