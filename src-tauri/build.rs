@@ -63,7 +63,10 @@ fn build_notch_window_lib() {
         .status()
         .expect("failed to run swiftc for notch_window");
 
-    assert!(swift_status.success(), "swiftc failed to build notch_window");
+    assert!(
+        swift_status.success(),
+        "swiftc failed to build notch_window"
+    );
 
     let ar_status = Command::new("ar")
         .args(["rcs", archive.to_str().unwrap(), object.to_str().unwrap()])

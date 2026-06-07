@@ -135,8 +135,9 @@ export async function copyItemToClipboard(id: string, message?: string): Promise
 }
 
 export async function copyItemsToClipboard(ids: string[], message?: string): Promise<void> {
+  let copiedCount = ids.length;
   try {
-    await invoke("copy_items_to_clipboard", { ids });
+    copiedCount = await invoke<number>("copy_items_to_clipboard", { ids });
   } catch (error) {
     window.dispatchEvent(
       new CustomEvent("clipflow:clipboard-feedback", {
@@ -150,7 +151,11 @@ export async function copyItemsToClipboard(ids: string[], message?: string): Pro
   }
   window.dispatchEvent(
     new CustomEvent("clipflow:clipboard-feedback", {
-      detail: message ?? "Copied selected clips",
+      detail:
+        message ??
+        (copiedCount === 1
+          ? "Copied 1 clip"
+          : `Copied ${copiedCount} clips as a group`),
     }),
   );
 }
@@ -201,6 +206,7 @@ export function itemTypeLabel(type: string): string {
     image: "Image",
     file: "File",
     color: "Color",
+    bundle: "Bundle",
   };
   return labels[type] ?? type;
 }
@@ -213,6 +219,7 @@ export function itemTypeIcon(type: string): string {
     image: "🖼",
     file: "📄",
     color: "◼",
+    bundle: "▦",
   };
   return icons[type] ?? "•";
 }

@@ -1,18 +1,45 @@
 use arboard::Clipboard;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tauri::{Emitter, State};
 use uuid::Uuid;
 
 use crate::app_icon::AppIconCache;
-use crate::clipboard::hash_content;
+use crate::clipboard::{hash_content, platform};
 use crate::db::Database;
 use crate::monitor::{
     looks_sensitive, paste_item, restore_to_clipboard, should_open_in_browser, ClipboardMonitor,
 };
 use crate::settings::AppSettings;
 use crate::types::{Category, ClipboardItem, ItemType, PaginatedItems, SearchParams, SourceApp};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BundlePayload {
+    items: Vec<BundleEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BundleEntry {
+    item_type: String,
+    content: String,
+    file_name: Option<String>,
+    mime_type: Option<String>,
+    image_data: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CopyFeedbackPayload {
+    count: usize,
+    labels: Vec<String>,
+    first_item_type: String,
+    first_source_app: Option<String>,
+}
 
 pub struct AppState {
     pub db: Arc<Mutex<Database>>,
@@ -126,7 +153,11 @@ pub fn get_contextual_recent(
                 .as_deref()
                 .map(|source| source.eq_ignore_ascii_case(&target_app))
                 .unwrap_or(false);
-            if same_app { 0 } else { 1 }
+            if same_app {
+                0
+            } else {
+                1
+            }
         });
     }
     items.truncate(limit as usize);
@@ -212,7 +243,8 @@ pub fn set_items_favorite(
     favorite: bool,
 ) -> Result<i64, String> {
     let db = state.db.lock();
-    db.set_items_favorite(&ids, favorite).map_err(|e| e.to_string())
+    db.set_items_favorite(&ids, favorite)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -232,7 +264,8 @@ pub fn set_pin_shortcut(
     shortcut: Option<i64>,
 ) -> Result<(), String> {
     let db = state.db.lock();
-    db.set_pin_shortcut(&id, shortcut).map_err(|e| e.to_string())
+    db.set_pin_shortcut(&id, shortcut)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -278,6 +311,7 @@ pub fn list_source_apps(state: State<'_, AppState>) -> Result<Vec<SourceApp>, St
 
 #[tauri::command]
 pub fn copy_item_to_clipboard(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
@@ -290,13 +324,23 @@ pub fn copy_item_to_clipboard(
             .unwrap_or(true);
         (item, hide_sensitive_content)
     };
-    authorize_sensitive_item(&item.content, hide_sensitive_content, "Copy sensitive clipboard item in ClipFlow.")?;
-    restore_to_clipboard(&item, &state.monitor).map_err(|e| e.to_string())?;
+    authorize_sensitive_item(
+        &item.content,
+        hide_sensitive_content,
+        "Copy sensitive clipboard item in ClipFlow.",
+    )?;
+    if ItemType::from_str(&item.item_type) == ItemType::Bundle {
+        restore_bundle_to_clipboard(&item, &state.monitor)?;
+    } else {
+        restore_to_clipboard(&item, &state.monitor).map_err(|e| e.to_string())?;
+    }
+    emit_copy_feedback(&app, copy_feedback_for_item(&item));
     Ok(())
 }
 
 #[tauri::command]
 pub fn copy_items_to_clipboard(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     ids: Vec<String>,
 ) -> Result<usize, String> {
@@ -328,23 +372,340 @@ pub fn copy_items_to_clipboard(
         )?;
     }
 
-    state.monitor.suppress_next();
-    let text = items
+    if items.len() == 1 {
+        if ItemType::from_str(&items[0].item_type) == ItemType::Bundle {
+            restore_bundle_to_clipboard(&items[0], &state.monitor)?;
+        } else {
+            restore_to_clipboard(&items[0], &state.monitor).map_err(|e| e.to_string())?;
+        }
+        emit_copy_feedback(&app, copy_feedback_for_item(&items[0]));
+        return Ok(1);
+    }
+
+    let bundle = create_bundle_item(&state, &items)?;
+    restore_bundle_to_clipboard(&bundle, &state.monitor)?;
+    let _ = app.emit("clipboard:new-item", "bundle");
+    emit_copy_feedback(&app, copy_feedback_for_items(&items));
+    Ok(items.len())
+}
+
+fn emit_copy_feedback(app: &tauri::AppHandle, payload: CopyFeedbackPayload) {
+    crate::notch::show_copy_feedback(app);
+    let _ = app.emit("clipboard:item-copied", payload);
+}
+
+fn copy_feedback_for_item(item: &ClipboardItem) -> CopyFeedbackPayload {
+    if ItemType::from_str(&item.item_type) == ItemType::Bundle {
+        if let Ok(payload) = bundle_payload(item) {
+            return copy_feedback_for_bundle_entries(&payload.items, item.source_app.clone());
+        }
+    }
+
+    CopyFeedbackPayload {
+        count: 1,
+        labels: vec![copy_feedback_label(&item.item_type)],
+        first_item_type: item.item_type.clone(),
+        first_source_app: item.source_app.clone(),
+    }
+}
+
+fn copy_feedback_for_items(items: &[ClipboardItem]) -> CopyFeedbackPayload {
+    let first = items.first();
+    let mut labels = Vec::new();
+    for item in items {
+        push_unique_label(&mut labels, copy_feedback_label(&item.item_type));
+        if labels.len() >= 3 {
+            break;
+        }
+    }
+
+    CopyFeedbackPayload {
+        count: items.len(),
+        labels,
+        first_item_type: first
+            .map(|item| item.item_type.clone())
+            .unwrap_or_else(|| "text".to_string()),
+        first_source_app: first.and_then(|item| item.source_app.clone()),
+    }
+}
+
+fn copy_feedback_for_bundle_entries(
+    items: &[BundleEntry],
+    fallback_source_app: Option<String>,
+) -> CopyFeedbackPayload {
+    let mut labels = Vec::new();
+    for item in items {
+        push_unique_label(&mut labels, copy_feedback_label(&item.item_type));
+        if labels.len() >= 3 {
+            break;
+        }
+    }
+
+    CopyFeedbackPayload {
+        count: items.len(),
+        labels,
+        first_item_type: items
+            .first()
+            .map(|item| item.item_type.clone())
+            .unwrap_or_else(|| "bundle".to_string()),
+        first_source_app: fallback_source_app,
+    }
+}
+
+fn push_unique_label(labels: &mut Vec<String>, label: String) {
+    if !labels.iter().any(|existing| existing == &label) {
+        labels.push(label);
+    }
+}
+
+fn copy_feedback_label(item_type: &str) -> String {
+    match ItemType::from_str(item_type) {
+        ItemType::Text => "Text",
+        ItemType::Url => "Link",
+        ItemType::Code => "Code",
+        ItemType::Image => "Image",
+        ItemType::File => "File",
+        ItemType::Color => "Color",
+        ItemType::Bundle => "Group",
+    }
+    .to_string()
+}
+
+fn create_bundle_item(
+    state: &State<'_, AppState>,
+    items: &[ClipboardItem],
+) -> Result<ClipboardItem, String> {
+    let payload = BundlePayload {
+        items: items
+            .iter()
+            .map(bundle_entry_from_item)
+            .collect::<Result<Vec<_>, _>>()?,
+    };
+    let payload_json = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    let id = Uuid::new_v4().to_string();
+    let title = format!("{} items copied", items.len());
+    let summary = items
+        .iter()
+        .take(6)
+        .map(|item| item.preview.trim())
+        .filter(|preview| !preview.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let content = if summary.is_empty() {
+        title.clone()
+    } else {
+        format!("{title}\n\n{summary}")
+    };
+    let content_hash = hash_content(&payload_json);
+
+    let db = state.db.lock();
+    let category_id = db
+        .category_id_by_name("History")
+        .map_err(|e| e.to_string())?;
+    let inserted = db
+        .insert_item(
+            &id,
+            &content,
+            &content_hash,
+            Some(&payload_json),
+            ItemType::Bundle,
+            Some("ClipFlow"),
+            category_id,
+            Some(&format!("{title}.clipflow-bundle")),
+            Some("application/vnd.clipflow.bundle+json"),
+            now,
+        )
+        .map_err(|e| e.to_string())?;
+    let item_id = inserted.unwrap_or(id);
+    db.get_item(&item_id).map_err(|e| e.to_string())
+}
+
+fn bundle_entry_from_item(item: &ClipboardItem) -> Result<BundleEntry, String> {
+    if ItemType::from_str(&item.item_type) == ItemType::Bundle {
+        let payload = bundle_payload(item)?;
+        return Ok(BundleEntry {
+            item_type: item.item_type.clone(),
+            content: serde_json::to_string(&payload).map_err(|e| e.to_string())?,
+            file_name: item.file_name.clone(),
+            mime_type: item.mime_type.clone(),
+            image_data: None,
+        });
+    }
+
+    Ok(BundleEntry {
+        item_type: item.item_type.clone(),
+        content: item.content.clone(),
+        file_name: item.file_name.clone(),
+        mime_type: item.mime_type.clone(),
+        image_data: if ItemType::from_str(&item.item_type) == ItemType::Image {
+            Some(image_png_base64(item)?)
+        } else {
+            None
+        },
+    })
+}
+
+fn restore_bundle_to_clipboard(
+    bundle: &ClipboardItem,
+    monitor: &ClipboardMonitor,
+) -> Result<(), String> {
+    let payload = bundle_payload(bundle)?;
+    if payload.items.iter().any(bundle_entry_has_file_payload) {
+        monitor.suppress_next();
+        let paths = export_bundle_entries_for_file_clipboard(&payload.items)?;
+        platform::write_file_urls(&paths)?;
+        return Ok(());
+    }
+
+    monitor.suppress_next();
+    let text = payload
+        .items
         .iter()
         .map(|item| item.content.trim())
         .filter(|content| !content.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n");
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.set_text(text).map_err(|e| e.to_string())?;
-    Ok(items.len())
+    clipboard.set_text(text).map_err(|e| e.to_string())
+}
+
+fn bundle_payload(bundle: &ClipboardItem) -> Result<BundlePayload, String> {
+    let Some(raw) = &bundle.thumbnail else {
+        return Err("Bundle data unavailable".to_string());
+    };
+    let Some(b64) = raw.strip_prefix("data:application/vnd.clipflow.bundle+json;base64,") else {
+        return Err("Bundle data unavailable".to_string());
+    };
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+fn bundle_entry_has_file_payload(item: &BundleEntry) -> bool {
+    matches!(
+        ItemType::from_str(&item.item_type),
+        ItemType::Image | ItemType::File | ItemType::Bundle
+    )
+}
+
+fn export_bundle_entries_for_file_clipboard(items: &[BundleEntry]) -> Result<Vec<PathBuf>, String> {
+    let dir = std::env::temp_dir().join(format!(
+        "clipflow-bulk-{}",
+        chrono::Utc::now().timestamp_millis()
+    ));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let mut paths = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        match ItemType::from_str(&item.item_type) {
+            ItemType::Image => {
+                let bytes = image_png_bytes_from_entry(item)?;
+                let file_name = item
+                    .file_name
+                    .as_deref()
+                    .filter(|name| !name.trim().is_empty())
+                    .map(safe_file_name)
+                    .unwrap_or_else(|| format!("ClipFlow image {}.png", index + 1));
+                let path = dir.join(ensure_extension(&file_name, "png"));
+                std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+                paths.push(path);
+            }
+            ItemType::File => {
+                paths.extend(
+                    item.content
+                        .lines()
+                        .map(str::trim)
+                        .filter(|path| !path.is_empty())
+                        .map(PathBuf::from)
+                        .filter(|path| path.exists()),
+                );
+            }
+            ItemType::Bundle => {
+                let payload: BundlePayload =
+                    serde_json::from_str(&item.content).map_err(|e| e.to_string())?;
+                paths.extend(export_bundle_entries_for_file_clipboard(&payload.items)?);
+            }
+            ItemType::Text | ItemType::Url | ItemType::Code | ItemType::Color => {
+                let ext = if matches!(ItemType::from_str(&item.item_type), ItemType::Code) {
+                    "txt"
+                } else {
+                    "txt"
+                };
+                let path = dir.join(format!("ClipFlow clip {}.{ext}", index + 1));
+                std::fs::write(&path, &item.content).map_err(|e| e.to_string())?;
+                paths.push(path);
+            }
+        }
+    }
+
+    if paths.is_empty() {
+        return Err("No files available to copy".to_string());
+    }
+    Ok(paths)
+}
+
+fn image_png_base64(item: &ClipboardItem) -> Result<String, String> {
+    let Some(thumbnail) = &item.thumbnail else {
+        return Err("Image data unavailable".to_string());
+    };
+    let Some(b64) = thumbnail.strip_prefix("data:image/png;base64,") else {
+        return Err("Image data unavailable".to_string());
+    };
+    Ok(b64.to_string())
+}
+
+fn image_png_bytes_from_entry(item: &BundleEntry) -> Result<Vec<u8>, String> {
+    let Some(b64) = item.image_data.as_deref() else {
+        return Err("Image data unavailable".to_string());
+    };
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    STANDARD.decode(b64).map_err(|e| e.to_string())
+}
+
+fn safe_file_name(name: &str) -> String {
+    name.chars()
+        .map(|ch| match ch {
+            '/' | '\\' | ':' | '\0' => '-',
+            _ => ch,
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+fn ensure_extension(file_name: &str, extension: &str) -> String {
+    if file_name
+        .rsplit('.')
+        .next()
+        .map(|ext| ext.eq_ignore_ascii_case(extension))
+        .unwrap_or(false)
+    {
+        file_name.to_string()
+    } else {
+        format!("{file_name}.{extension}")
+    }
 }
 
 #[tauri::command]
-pub fn copy_text_to_clipboard(state: State<'_, AppState>, text: String) -> Result<(), String> {
+pub fn copy_text_to_clipboard(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    text: String,
+) -> Result<(), String> {
     state.monitor.suppress_next();
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.set_text(text).map_err(|e| e.to_string())
+    clipboard.set_text(text).map_err(|e| e.to_string())?;
+    emit_copy_feedback(
+        &app,
+        CopyFeedbackPayload {
+            count: 1,
+            labels: vec!["Text".to_string()],
+            first_item_type: "text".to_string(),
+            first_source_app: Some("ClipFlow".to_string()),
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -355,7 +716,11 @@ pub fn paste_item_by_id(state: State<'_, AppState>, id: String) -> Result<(), St
         let settings = db.get_settings().unwrap_or_default();
         (item, settings.auto_paste, settings.hide_sensitive_content)
     };
-    authorize_sensitive_item(&item.content, hide_sensitive_content, "Paste sensitive clipboard item from ClipFlow.")?;
+    authorize_sensitive_item(
+        &item.content,
+        hide_sensitive_content,
+        "Paste sensitive clipboard item from ClipFlow.",
+    )?;
     if should_open_in_browser(&item) || auto_paste {
         paste_item(&item, &state.monitor).map_err(|e| e.to_string())
     } else {

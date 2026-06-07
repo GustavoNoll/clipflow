@@ -11,7 +11,6 @@ import {
   Star,
 } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
-import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
   applyFirstSearchFilterSuggestion,
   hasSearchFilterSuggestion,
@@ -43,6 +42,13 @@ import { useUpdateStatus } from "./lib/update-status-context";
 import type { Category, ClipboardItem, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
+interface NotchCopyFeedbackPayload {
+  count: number;
+  labels: string[];
+  firstItemType: string;
+  firstSourceApp?: string | null;
+}
+
 export default function NotchShelf() {
   const { settings } = useSettings();
   const { t } = useI18n();
@@ -57,11 +63,13 @@ export default function NotchShelf() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peekItem, setPeekItem] = useState<ClipboardItem | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<NotchCopyFeedbackPayload | null>(null);
   const [notchHovered, setNotchHovered] = useState(false);
   const [hoverClosing, setHoverClosing] = useState(false);
   const [loading, setLoading] = useState(false);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shelfOpen = expanded || notchHovered;
   const shelfVisible = shelfOpen || hoverClosing;
   const itemGroups = useMemo(() => groupItemsByDate(items), [items]);
@@ -113,10 +121,9 @@ export default function NotchShelf() {
     const orderedIds = items
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
-    await copyItemsToClipboard(
-      orderedIds,
-      t("copiedSelected", { count: orderedIds.length }),
-    );
+    if (orderedIds.length === 0) return;
+    await copyItemsToClipboard(orderedIds);
+    setSelected(new Set());
   }, [items, selected, t]);
 
   useEffect(() => {
@@ -129,8 +136,27 @@ export default function NotchShelf() {
       document.body.classList.remove("notch-shelf");
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
       if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+      if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
     };
   }, [refreshPeek]);
+
+  useEffect(() => {
+    const unlistenCopied = listen<NotchCopyFeedbackPayload>(
+      "clipboard:item-copied",
+      (event) => {
+        if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
+        setCopyFeedback(event.payload);
+        copyFeedbackTimerRef.current = setTimeout(() => {
+          setCopyFeedback(null);
+        }, 1450);
+      },
+    );
+
+    return () => {
+      if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
+      unlistenCopied.then((fn) => fn());
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 120);
@@ -173,7 +199,7 @@ export default function NotchShelf() {
         void collapse();
       }
       if (
-        event.metaKey &&
+        (event.metaKey || event.ctrlKey) &&
         event.key.toLowerCase() === "c" &&
         selected.size > 0 &&
         !(event.target instanceof HTMLInputElement) &&
@@ -378,7 +404,9 @@ export default function NotchShelf() {
       onMouseEnter={handleShelfMouseEnter}
       onMouseLeave={handleShelfMouseLeave}
     >
-      <ClipboardFeedback variant="dark" position="bottom" compact />
+      {!shelfVisible && copyFeedback && (
+        <NotchCopyFeedback feedback={copyFeedback} />
+      )}
       {!shelfVisible && settings.notchHoverEnabled && (
         <div
           className="notch-trigger h-full w-full bg-transparent"
@@ -436,9 +464,13 @@ export default function NotchShelf() {
               {selected.size > 0 && (
                 <button
                   type="button"
-                  onClick={handleBatchCopy}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void handleBatchCopy();
+                  }}
                   className="flex h-9 items-center gap-1.5 rounded-full bg-white px-3 text-[12px] font-bold text-black shadow-[0_8px_24px_rgba(255,255,255,0.16)] transition-transform hover:scale-[1.02]"
-                  title="⌘C"
+                  title="⌘C / Ctrl+C"
                 >
                   <Copy size={14} />
                   {t("copySelected")}
@@ -541,6 +573,34 @@ export default function NotchShelf() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function NotchCopyFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload }) {
+  const label = `${feedback.count} ${
+    feedback.count === 1 ? "item" : "items"
+  }`;
+  const details = feedback.labels.filter(Boolean).join(", ");
+
+  return (
+    <div
+      aria-live="polite"
+      className="notch-copy-feedback pointer-events-none flex h-full w-full items-end justify-center bg-black px-4 pb-3"
+    >
+      <div className="flex min-w-0 max-w-[320px] items-center gap-2">
+        {feedback.firstSourceApp ? (
+          <AppIcon appName={feedback.firstSourceApp} size="sm" />
+        ) : (
+          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] bg-white/[0.92] text-black">
+            <Copy size={11} strokeWidth={2.4} />
+          </span>
+        )}
+        <p className="min-w-0 truncate text-[12px] font-semibold tracking-tight text-white/88">
+          {label}
+          {details && <span className="text-white/62"> · {details}</span>}
+        </p>
+      </div>
     </div>
   );
 }

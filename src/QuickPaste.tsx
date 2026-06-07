@@ -172,11 +172,9 @@ export default function QuickPaste() {
     const orderedIds = displayItems
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
-    await copyItemsToClipboard(
-      orderedIds,
-      t("copiedSelected", { count: orderedIds.length }),
-    );
-    await getCurrentWindow().hide();
+    if (orderedIds.length === 0) return;
+    await copyItemsToClipboard(orderedIds);
+    setSelected(new Set());
   }, [displayItems, selected, t]);
 
   useEffect(() => {
@@ -185,7 +183,7 @@ export default function QuickPaste() {
         event.preventDefault();
         void getCurrentWindow().hide();
       } else if (
-        event.metaKey &&
+        (event.metaKey || event.ctrlKey) &&
         event.key.toLowerCase() === "c" &&
         selected.size > 0 &&
         !(event.target instanceof HTMLInputElement) &&
@@ -365,7 +363,11 @@ export default function QuickPaste() {
           {selected.size > 0 ? (
             <button
               type="button"
-              onClick={handleBatchCopy}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void handleBatchCopy();
+              }}
               className="rounded-full bg-white px-2.5 py-1 font-semibold text-black"
             >
               <Copy size={11} className="mr-1 inline" />
@@ -374,7 +376,7 @@ export default function QuickPaste() {
           ) : (
             <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("recentShortcut")}</span>
           )}
-          <span className="rounded-full bg-white/[0.06] px-2 py-1">{selected.size > 0 ? "⌘C" : t("clickToCopy")}</span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-1">{selected.size > 0 ? "⌘C / Ctrl+C" : t("clickToCopy")}</span>
           <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("escCloses")}</span>
         </div>
       </div>

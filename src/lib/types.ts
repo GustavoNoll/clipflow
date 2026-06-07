@@ -1,4 +1,4 @@
-export type ItemType = "text" | "url" | "code" | "image" | "file" | "color";
+export type ItemType = "text" | "url" | "code" | "image" | "file" | "color" | "bundle";
 
 export interface Category {
   id: number;

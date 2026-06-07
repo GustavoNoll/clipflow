@@ -195,7 +195,8 @@ impl Database {
     ) -> Result<Option<String>, DbError> {
         const DEDUP_WINDOW_SECS: i64 = 45;
 
-        if let Some(existing_id) = self.conn
+        if let Some(existing_id) = self
+            .conn
             .query_row(
                 "SELECT id FROM clipboard_items
                  WHERE content_hash = ?1 AND created_at > ?2
@@ -647,13 +648,19 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItem> {
     } else {
         crate::types::truncate_preview(&content, 200)
     };
-    let thumbnail = if item_type == "image" {
-        raw_data.as_ref().map(|data| {
+    let thumbnail = match item_type.as_str() {
+        "image" => raw_data.as_ref().map(|data| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             format!("data:image/png;base64,{}", STANDARD.encode(data))
-        })
-    } else {
-        None
+        }),
+        "bundle" => raw_data.as_ref().map(|data| {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            format!(
+                "data:application/vnd.clipflow.bundle+json;base64,{}",
+                STANDARD.encode(data)
+            )
+        }),
+        _ => None,
     };
     let content_size = compute_content_size(&item_type, &content, &raw_data);
 
@@ -743,7 +750,10 @@ fn apply_filters(
         sql_params.push(Box::new(format!("%{}%", app.to_lowercase())));
     }
 
-    let item_type = parsed_query.item_type.as_ref().or(params.item_type.as_ref());
+    let item_type = parsed_query
+        .item_type
+        .as_ref()
+        .or(params.item_type.as_ref());
     if let Some(item_type) = item_type {
         conditions.push(format!("ci.item_type = ?{}", sql_params.len() + 1));
         sql_params.push(Box::new(item_type.clone()));

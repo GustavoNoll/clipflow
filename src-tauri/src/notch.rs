@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, WebviewWindow};
 use crate::notch_layout::{self, NotchLayout};
 
 const HOVER_EXIT_CONTENT_DELAY_MS: u64 = 90;
+const COPY_FEEDBACK_MS: u64 = 1650;
 
 fn expanded_size(layout: &NotchLayout) -> (f64, f64) {
     let width = (layout.screen_width * 0.64).clamp(760.0, 980.0);
@@ -16,6 +17,13 @@ fn expanded_size(layout: &NotchLayout) -> (f64, f64) {
 
 fn hover_size(layout: &NotchLayout) -> (f64, f64) {
     expanded_size(layout)
+}
+
+fn copy_feedback_size(layout: &NotchLayout) -> (f64, f64) {
+    (
+        layout.collapsed_width.max(360.0),
+        layout.collapsed_height + 42.0,
+    )
 }
 
 fn notch_dimensions(layout: &NotchLayout, expanded: bool, hover_preview: bool) -> (f64, f64) {
@@ -28,6 +36,36 @@ fn notch_dimensions(layout: &NotchLayout, expanded: bool, hover_preview: bool) -
     }
 }
 
+pub fn show_copy_feedback(app: &tauri::AppHandle) {
+    if !is_notch_click_mode(app) || is_shelf_expanded() || is_hover_preview_active() {
+        return;
+    }
+
+    let Some(win) = app.get_webview_window("notch-shelf") else {
+        return;
+    };
+
+    let layout = notch_layout::current_layout();
+    let (width, height) = copy_feedback_size(&layout);
+    place_notch_window_native(&win, &layout, width, height);
+    let _ = win.show();
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(COPY_FEEDBACK_MS));
+        let restore_app = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if !is_notch_click_mode(&restore_app)
+                || is_shelf_expanded()
+                || is_hover_preview_active()
+            {
+                return;
+            }
+            show_collapsed_on_main(&restore_app);
+        });
+    });
+}
+
 #[cfg(target_os = "macos")]
 extern "C" {
     fn clipflow_place_notch_window(
@@ -37,48 +75,39 @@ extern "C" {
         width: f64,
         height: f64,
     );
-    fn clipflow_cursor_inside_rect(
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-        margin: f64,
-    ) -> bool;
+    fn clipflow_cursor_inside_rect(x: f64, y: f64, width: f64, height: f64, margin: f64) -> bool;
 }
 
 #[cfg(target_os = "macos")]
 fn place_notch_window_native(win: &WebviewWindow, layout: &NotchLayout, width: f64, height: f64) {
-    let frame_origin_x =
-        layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
+    let frame_origin_x = layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
     let frame_origin_y = layout.screen_frame_max_y - height;
 
-    let _ = win.with_webview(move |webview| {
-        unsafe {
-            clipflow_place_notch_window(
-                webview.ns_window(),
-                frame_origin_x,
-                frame_origin_y,
-                width,
-                height,
-            );
-        }
+    let _ = win.with_webview(move |webview| unsafe {
+        clipflow_place_notch_window(
+            webview.ns_window(),
+            frame_origin_x,
+            frame_origin_y,
+            width,
+            height,
+        );
     });
 }
 
 #[cfg(not(target_os = "macos"))]
-fn place_notch_window_native(
-    win: &WebviewWindow,
-    _layout: &NotchLayout,
-    width: f64,
-    height: f64,
-) {
+fn place_notch_window_native(win: &WebviewWindow, _layout: &NotchLayout, width: f64, height: f64) {
     use tauri::{LogicalPosition, LogicalSize, Size};
     let _ = win.set_always_on_top(true);
     let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
     let _ = win.set_position(tauri::Position::Logical(LogicalPosition::new(0.0, 0.0)));
 }
 
-fn apply_notch_window(win: &WebviewWindow, layout: &NotchLayout, expanded: bool, hover_preview: bool) {
+fn apply_notch_window(
+    win: &WebviewWindow,
+    layout: &NotchLayout,
+    expanded: bool,
+    hover_preview: bool,
+) {
     let (width, height) = notch_dimensions(layout, expanded, hover_preview);
     place_notch_window_native(win, layout, width, height);
     let _ = win.show();
@@ -86,12 +115,9 @@ fn apply_notch_window(win: &WebviewWindow, layout: &NotchLayout, expanded: bool,
 
 #[cfg(target_os = "macos")]
 fn cursor_inside_notch_rect(layout: &NotchLayout, width: f64, height: f64, margin: f64) -> bool {
-    let frame_origin_x =
-        layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
+    let frame_origin_x = layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
     let frame_origin_y = layout.screen_frame_max_y - height;
-    unsafe {
-        clipflow_cursor_inside_rect(frame_origin_x, frame_origin_y, width, height, margin)
-    }
+    unsafe { clipflow_cursor_inside_rect(frame_origin_x, frame_origin_y, width, height, margin) }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -380,12 +406,10 @@ pub fn toggle_notch_shelf(app: &tauri::AppHandle) {
 }
 
 pub fn start_layout_refresh_poller(enabled: std::sync::Arc<AtomicBool>) {
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(Duration::from_secs(5));
-            if enabled.load(Ordering::SeqCst) {
-                notch_layout::refresh_layout();
-            }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(5));
+        if enabled.load(Ordering::SeqCst) {
+            notch_layout::refresh_layout();
         }
     });
 }

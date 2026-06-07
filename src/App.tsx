@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { AppLogo } from "./components/app-logo";
+import { AppIcon } from "./components/app-icon";
 import { ClipCard } from "./components/clip-card";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import { SettingsPanel } from "./components/settings-panel";
@@ -145,10 +146,7 @@ export default function App() {
     const orderedIds = items
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
-    await copyItemsToClipboard(
-      orderedIds,
-      t("copiedSelected", { count: orderedIds.length }),
-    );
+    await copyItemsToClipboard(orderedIds);
   }, [items, selected, t]);
 
   const handleClearHistory = useCallback(async () => {
@@ -303,6 +301,7 @@ export default function App() {
         ["image", "typeImage"],
         ["file", "typeFile"],
         ["color", "typeColor"],
+        ["bundle", "typeBundle"],
       ] as const).map(([id, key]) => ({ id: id as ItemType, label: t(key) })),
     [t],
   );
@@ -563,6 +562,7 @@ export default function App() {
                 <SidebarButton
                   key={app.name}
                   active={view === "app" && sourceApp === app.name}
+                  icon={<AppIcon appName={app.name} size="xs" />}
                   label={app.name}
                   count={app.count}
                   onClick={() => {

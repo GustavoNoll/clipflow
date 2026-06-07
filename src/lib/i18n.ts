@@ -127,11 +127,12 @@ const messages = {
     selectedCount: "{count} selected",
     pinShortcut: "Pin shortcut",
     removePinShortcut: "Remove pin shortcut",
-    searchFilterHint: "Filters: @app:Arc @type:image @fav @pin",
+    searchFilterHint: "Filters: @app:Arc @type:image @type:bundle @fav @pin",
     filterByApp: "filter by source app",
     filterImages: "only screenshots/images",
     filterCode: "only code clips",
     filterLinks: "only links",
+    filterBundles: "only copied groups",
     filterFavorites: "only favorites",
     filterPinned: "only pinned clips",
     findInLibrary: "Find in library",
@@ -161,6 +162,7 @@ const messages = {
     typeImage: "Image",
     typeFile: "File",
     typeColor: "Color",
+    typeBundle: "Bundle",
     categoryHistory: "History",
     categoryPrompts: "Prompts",
     categoryAssets: "Assets",
@@ -292,11 +294,12 @@ const messages = {
     selectedCount: "{count} selecionados",
     pinShortcut: "Atalho fixo",
     removePinShortcut: "Remover atalho fixo",
-    searchFilterHint: "Filtros: @app:Arc @type:image @fav @pin",
+    searchFilterHint: "Filtros: @app:Arc @type:image @type:bundle @fav @pin",
     filterByApp: "filtrar por app",
     filterImages: "só screenshots/imagens",
     filterCode: "só clips de código",
     filterLinks: "só links",
+    filterBundles: "só grupos copiados",
     filterFavorites: "só favoritos",
     filterPinned: "só clips fixados",
     findInLibrary: "Buscar na biblioteca",
@@ -326,6 +329,7 @@ const messages = {
     typeImage: "Imagem",
     typeFile: "Arquivo",
     typeColor: "Cor",
+    typeBundle: "Grupo",
     categoryHistory: "Histórico",
     categoryPrompts: "Prompts",
     categoryAssets: "Assets",
@@ -457,11 +461,12 @@ const messages = {
     selectedCount: "{count} seleccionados",
     pinShortcut: "Atajo fijado",
     removePinShortcut: "Quitar atajo fijado",
-    searchFilterHint: "Filtros: @app:Arc @type:image @fav @pin",
+    searchFilterHint: "Filtros: @app:Arc @type:image @type:bundle @fav @pin",
     filterByApp: "filtrar por app",
     filterImages: "solo capturas/imágenes",
     filterCode: "solo clips de código",
     filterLinks: "solo enlaces",
+    filterBundles: "solo grupos copiados",
     filterFavorites: "solo favoritos",
     filterPinned: "solo clips fijados",
     findInLibrary: "Buscar en la biblioteca",
@@ -491,6 +496,7 @@ const messages = {
     typeImage: "Imagen",
     typeFile: "Archivo",
     typeColor: "Color",
+    typeBundle: "Grupo",
     categoryHistory: "Historial",
     categoryPrompts: "Prompts",
     categoryAssets: "Assets",
@@ -563,7 +569,9 @@ export function translateItemType(language: Language, type: string) {
               ? "typeFile"
               : type === "color"
                 ? "typeColor"
-                : null;
+                : type === "bundle"
+                  ? "typeBundle"
+                  : null;
 
   return key ? translate(language, key) : type;
 }

@@ -112,7 +112,12 @@ pub fn run() {
                 if let Err(err) = macos_menu::setup(app) {
                     eprintln!("ClipFlow: native menu unavailable ({err})");
                 } else {
-                    let settings = app.state::<AppState>().db.lock().get_settings().unwrap_or_default();
+                    let settings = app
+                        .state::<AppState>()
+                        .db
+                        .lock()
+                        .get_settings()
+                        .unwrap_or_default();
                     macos_menu::sync_from_settings(app.handle(), &settings);
                 }
             }
@@ -166,8 +171,7 @@ pub fn run() {
         .expect("error while running tauri application")
         .run({
             let startup_shown = Arc::clone(&startup_shown);
-            move |app, event| {
-            match event {
+            move |app, event| match event {
                 RunEvent::Ready => {
                     if !startup_shown.swap(true, Ordering::SeqCst)
                         && !notch::is_notch_click_mode(app)
@@ -175,7 +179,10 @@ pub fn run() {
                         show_main_window(app);
                     }
                 }
-                RunEvent::Reopen { has_visible_windows, .. } => {
+                RunEvent::Reopen {
+                    has_visible_windows,
+                    ..
+                } => {
                     if !notch::is_notch_click_mode(app)
                         && !has_visible_windows
                         && !has_visible_auxiliary_window(app)
@@ -220,7 +227,6 @@ pub fn run() {
                 }
                 _ => {}
             }
-        }
         });
 }
 
@@ -337,7 +343,11 @@ fn parse_shortcut(raw: &str) -> Option<Shortcut> {
     let mut modifiers = Modifiers::empty();
     let mut code = None;
 
-    for part in raw.split('+').map(str::trim).filter(|part| !part.is_empty()) {
+    for part in raw
+        .split('+')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
         match part.to_ascii_lowercase().as_str() {
             "control" | "ctrl" => modifiers |= Modifiers::CONTROL,
             "shift" => modifiers |= Modifiers::SHIFT,
@@ -429,7 +439,6 @@ fn has_visible_auxiliary_window(app: &tauri::AppHandle) -> bool {
             .unwrap_or(false)
     })
 }
-
 
 pub(crate) fn show_main_window(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]

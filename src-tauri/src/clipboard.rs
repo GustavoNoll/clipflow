@@ -57,7 +57,7 @@ pub fn category_for_type(item_type: &ItemType) -> &'static str {
         ItemType::Image => "Screenshots",
         ItemType::File => "Assets",
         ItemType::Url => "History",
-        ItemType::Text => "History",
+        ItemType::Text | ItemType::Bundle => "History",
     }
 }
 
@@ -69,6 +69,36 @@ pub fn hash_content(data: &[u8]) -> String {
 
 #[cfg(target_os = "macos")]
 pub mod platform {
+    pub fn write_file_urls(paths: &[std::path::PathBuf]) -> Result<(), String> {
+        if paths.is_empty() {
+            return Err("no files to copy".to_string());
+        }
+
+        let mut script = String::from("set theFiles to {}\n");
+        for path in paths {
+            let escaped = path
+                .to_string_lossy()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"");
+            script.push_str(&format!(
+                "set end of theFiles to (POSIX file \"{}\" as alias)\n",
+                escaped
+            ));
+        }
+        script.push_str("set the clipboard to theFiles\n");
+
+        let output = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        }
+    }
+
     pub fn read_file_urls() -> Vec<String> {
         let script = r#"
             set output to ""
@@ -133,6 +163,10 @@ pub mod platform {
 
 #[cfg(not(target_os = "macos"))]
 pub mod platform {
+    pub fn write_file_urls(_paths: &[std::path::PathBuf]) -> Result<(), String> {
+        Err("unsupported platform".to_string())
+    }
+
     pub fn read_file_urls() -> Vec<String> {
         vec![]
     }

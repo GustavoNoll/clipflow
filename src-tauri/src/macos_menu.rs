@@ -35,13 +35,10 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     let initial_paused = {
         let state = app.state::<AppState>();
         let db = state.db.lock();
-        db.get_settings()
-            .map(|s| s.capture_paused)
-            .unwrap_or(false)
+        db.get_settings().map(|s| s.capture_paused).unwrap_or(false)
     };
 
-    let settings =
-        MenuItem::with_id(handle, "settings", "Settings…", true, Some("Cmd+,"))?;
+    let settings = MenuItem::with_id(handle, "settings", "Settings…", true, Some("Cmd+,"))?;
     let open_library =
         MenuItem::with_id(handle, "open-library", "Open Library", true, Some("Cmd+O"))?;
     let clear_history = MenuItem::with_id(
@@ -187,13 +184,7 @@ pub fn setup(app: &App) -> tauri::Result<()> {
         ],
     )?;
 
-    let help_menu = Submenu::with_id_and_items(
-        handle,
-        "help",
-        "Help",
-        true,
-        &[&show_shortcuts],
-    )?;
+    let help_menu = Submenu::with_id_and_items(handle, "help", "Help", true, &[&show_shortcuts])?;
 
     let menu = Menu::with_items(
         handle,

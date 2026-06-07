@@ -482,7 +482,12 @@ pub fn restore_to_clipboard(
                 .set_text(&item.content)
                 .map_err(|e| e.to_string())?;
         }
-        ItemType::File | ItemType::Text | ItemType::Url | ItemType::Code | ItemType::Color => {
+        ItemType::File
+        | ItemType::Text
+        | ItemType::Url
+        | ItemType::Code
+        | ItemType::Color
+        | ItemType::Bundle => {
             clipboard
                 .set_text(&item.content)
                 .map_err(|e| e.to_string())?;
@@ -540,10 +545,7 @@ mod tests {
             1_779_869_520,
         );
 
-        assert_eq!(
-            name,
-            "screenshot-codigo-arquitetura-20260527-081200.png"
-        );
+        assert_eq!(name, "screenshot-codigo-arquitetura-20260527-081200.png");
     }
 
     #[test]

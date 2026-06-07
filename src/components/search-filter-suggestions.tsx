@@ -13,7 +13,14 @@ interface SearchFilterSuggestionsProps {
 export interface SearchFilterSuggestion {
   token: string;
   label: string;
-  descriptionKey?: "filterByApp" | "filterImages" | "filterCode" | "filterLinks" | "filterFavorites" | "filterPinned";
+  descriptionKey?:
+    | "filterByApp"
+    | "filterImages"
+    | "filterCode"
+    | "filterLinks"
+    | "filterBundles"
+    | "filterFavorites"
+    | "filterPinned";
   description?: string;
 }
 
@@ -22,6 +29,7 @@ const BASE_SUGGESTIONS: SearchFilterSuggestion[] = [
   { token: "@type:image", label: "@type:image", descriptionKey: "filterImages" },
   { token: "@type:code", label: "@type:code", descriptionKey: "filterCode" },
   { token: "@type:url", label: "@type:url", descriptionKey: "filterLinks" },
+  { token: "@type:bundle", label: "@type:bundle", descriptionKey: "filterBundles" },
   { token: "@fav", label: "@fav", descriptionKey: "filterFavorites" },
   { token: "@pin", label: "@pin", descriptionKey: "filterPinned" },
 ];

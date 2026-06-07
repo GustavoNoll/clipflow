@@ -9,6 +9,7 @@ pub enum ItemType {
     Image,
     File,
     Color,
+    Bundle,
 }
 
 impl ItemType {
@@ -20,6 +21,7 @@ impl ItemType {
             Self::Image => "image",
             Self::File => "file",
             Self::Color => "color",
+            Self::Bundle => "bundle",
         }
     }
 
@@ -30,6 +32,7 @@ impl ItemType {
             "image" => Self::Image,
             "file" => Self::File,
             "color" => Self::Color,
+            "bundle" => Self::Bundle,
             _ => Self::Text,
         }
     }
