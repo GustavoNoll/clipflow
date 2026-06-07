@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
-use tauri::{Emitter, Manager, WebviewWindow};
+use tauri::{Emitter, LogicalPosition, LogicalSize, Manager, Position, Size, WebviewWindow};
 
 use crate::notch_layout::{self, NotchLayout};
 
@@ -84,6 +84,12 @@ fn place_notch_window_native(win: &WebviewWindow, layout: &NotchLayout, width: f
     let frame_origin_x = layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
     let frame_origin_y = layout.screen_frame_max_y - height;
 
+    let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
+    let _ = win.set_position(Position::Logical(LogicalPosition::new(
+        frame_origin_x,
+        layout.screen_y,
+    )));
+
     let _ = win.with_webview(move |webview| unsafe {
         clipflow_place_notch_window(
             webview.ns_window(),
@@ -117,8 +123,7 @@ fn apply_notch_window(
 #[cfg(target_os = "macos")]
 fn cursor_inside_notch_rect(layout: &NotchLayout, width: f64, height: f64, margin: f64) -> bool {
     let frame_origin_x = layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
-    let frame_origin_y = layout.screen_frame_max_y - height;
-    unsafe { clipflow_cursor_inside_rect(frame_origin_x, frame_origin_y, width, height, margin) }
+    unsafe { clipflow_cursor_inside_rect(frame_origin_x, layout.screen_y, width, height, margin) }
 }
 
 #[cfg(not(target_os = "macos"))]

@@ -83,9 +83,10 @@ public func clipflow_cursor_inside_rect(
     _ height: Double,
     _ margin: Double
 ) -> Bool {
+    let mouseLocation = CGEvent(source: nil)?.location ?? .zero
     let frame = NSRect(x: x, y: y, width: width, height: height)
         .insetBy(dx: -margin, dy: -margin)
-    return frame.contains(NSEvent.mouseLocation)
+    return frame.contains(mouseLocation)
 }
 
 @_cdecl("clipflow_place_quick_paste_near_cursor")

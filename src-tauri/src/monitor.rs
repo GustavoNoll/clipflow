@@ -1,5 +1,6 @@
 use arboard::{Clipboard, ImageData};
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -274,7 +275,77 @@ pub fn looks_sensitive(text: &str) -> bool {
         || text.contains("ghs_")
         || text.contains("ghr_");
     let openai_key = text.contains("sk-") && text.len() > 24;
-    keyword_match || bearer_match || github_token || openai_key
+    keyword_match || bearer_match || github_token || openai_key || has_high_entropy_token(text)
+}
+
+fn has_high_entropy_token(text: &str) -> bool {
+    text.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-')
+        .any(|token| {
+            let len = token.len();
+            if !(16..=128).contains(&len) {
+                return false;
+            }
+            if looks_like_human_label(token) {
+                return false;
+            }
+            if token.chars().filter(|ch| ch.is_ascii_digit()).count() < 2 {
+                return false;
+            }
+            if character_class_count(token) < 3 {
+                return false;
+            }
+            if unique_ratio(token) < 0.45 {
+                return false;
+            }
+            shannon_entropy(token) >= 3.45
+        })
+}
+
+fn looks_like_human_label(token: &str) -> bool {
+    token
+        .split(['_', '-'])
+        .filter(|segment| segment.len() >= 3 && segment.chars().all(|ch| ch.is_ascii_alphabetic()))
+        .count()
+        >= 2
+}
+
+fn character_class_count(token: &str) -> usize {
+    [
+        token.chars().any(|ch| ch.is_ascii_lowercase()),
+        token.chars().any(|ch| ch.is_ascii_uppercase()),
+        token.chars().any(|ch| ch.is_ascii_digit()),
+        token.chars().any(|ch| ch == '_' || ch == '-'),
+    ]
+    .into_iter()
+    .filter(|matched| *matched)
+    .count()
+}
+
+fn unique_ratio(token: &str) -> f64 {
+    let len = token.chars().count();
+    if len == 0 {
+        return 0.0;
+    }
+    let unique = token
+        .chars()
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    unique as f64 / len as f64
+}
+
+fn shannon_entropy(token: &str) -> f64 {
+    let len = token.chars().count();
+    if len == 0 {
+        return 0.0;
+    }
+    let mut counts = HashMap::new();
+    for ch in token.chars() {
+        *counts.entry(ch).or_insert(0usize) += 1;
+    }
+    counts.values().fold(0.0, |entropy, count| {
+        let probability = *count as f64 / len as f64;
+        entropy - probability * probability.log2()
+    })
 }
 
 fn capture_text(
@@ -573,5 +644,18 @@ mod tests {
             slugify("https://buyclipflow.vercel.app/").as_deref(),
             Some("https-buyclipflow-vercel-app")
         );
+    }
+
+    #[test]
+    fn detects_short_random_access_tokens() {
+        assert!(looks_sensitive("VBHG0ewghd1ydQzB"));
+        assert!(looks_sensitive("session=VBHG0ewghd1ydQzB"));
+    }
+
+    #[test]
+    fn does_not_mark_common_identifiers_as_sensitive() {
+        assert!(!looks_sensitive("AnalyticsCacheManager"));
+        assert!(!looks_sensitive("MassivesSettingsV2"));
+        assert!(!looks_sensitive("Gustavo_Noll_Resume_2026.docx"));
     }
 }

@@ -49,7 +49,7 @@ ok "startup with hover ON (no crash)"
 
 PID=$(pgrep -x clipflow)
 swift "$ROOT/scripts/test-notch-hover-extended.swift" "$PID" | tee /tmp/notch-hover-test.log
-grep -qE "delta=[1-9]" /tmp/notch-hover-test.log || fail "notch shelf did not appear on hover"
+grep -qE "heightDelta=[1-9][0-9]*|widthDelta=[1-9][0-9]*" /tmp/notch-hover-test.log || fail "notch shelf did not expand on hover"
 
-ok "notch shelf visible after hover"
+ok "notch shelf expands after hover"
 echo "== ALL TESTS PASSED =="
