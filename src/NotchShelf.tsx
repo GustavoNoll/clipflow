@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   CircleArrowUp,
@@ -9,7 +9,6 @@ import {
   Grid3X3,
   Plus,
   Star,
-  X,
 } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
 import { FileIcon, isDownloadFileItem } from "./components/file-icon";
@@ -18,11 +17,9 @@ import {
   createCategory,
   copyDownloadPathsToClipboard,
   copyDownloadToClipboard,
-  copyFilePathsToClipboard,
   copyItemToClipboard,
   copyItemsToClipboard,
   deleteItem,
-  fileItemsFromPaths,
   getContextualRecent,
   itemTypeLabel,
   listCategories,
@@ -30,7 +27,6 @@ import {
   listRecentDownloads,
   openLibraryWindow,
   pasteDownloadByPath,
-  pasteFileByPath,
   pasteItemById,
   setNotchExpanded,
   setNotchHoverPreview,
@@ -52,13 +48,6 @@ interface NotchCopyFeedbackPayload {
   firstSourceApp?: string | null;
 }
 
-interface TauriFileDropPayload {
-  type: "enter" | "over" | "drop" | "leave";
-  paths?: string[];
-}
-
-const BENCH_STORAGE_KEY = "clipflow:notch-bench-items";
-
 export default function NotchShelf() {
   const { settings } = useSettings();
   const { t } = useI18n();
@@ -68,7 +57,6 @@ export default function NotchShelf() {
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [downloadsOnly, setDownloadsOnly] = useState(false);
-  const [benchOnly, setBenchOnly] = useState(false);
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peekItem, setPeekItem] = useState<ClipboardItem | null>(null);
@@ -76,13 +64,9 @@ export default function NotchShelf() {
   const [notchHovered, setNotchHovered] = useState(false);
   const [hoverClosing, setHoverClosing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [benchItems, setBenchItems] = useState<ClipboardItem[]>([]);
-  const [benchDropActive, setBenchDropActive] = useState(false);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draggedItemRef = useRef<ClipboardItem | null>(null);
   const visibleItemsRef = useRef<ClipboardItem[]>([]);
   const shelfOpen = expanded || notchHovered;
   const shelfVisible = shelfOpen || hoverClosing;
@@ -106,10 +90,6 @@ export default function NotchShelf() {
         setItems(downloads);
         return;
       }
-      if (benchOnly) {
-        setItems(benchItems);
-        return;
-      }
       const result = await listItems({
         categoryId: favoritesOnly ? undefined : activeCategory,
         favoritesOnly,
@@ -120,7 +100,7 @@ export default function NotchShelf() {
     } finally {
       setLoading(false);
     }
-  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly, benchItems]);
+  }, [activeCategory, favoritesOnly, downloadsOnly]);
 
   const collapse = useCallback(async () => {
     setExpanded(false);
@@ -143,19 +123,15 @@ export default function NotchShelf() {
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
     if (orderedIds.length === 0) return;
-    if (downloadsOnly || benchOnly) {
+    if (downloadsOnly) {
       const filePaths = items
-        .filter((item) => selected.has(item.id) && isFileBackedItem(item))
+        .filter((item) => selected.has(item.id) && isDownloadItem(item))
         .map((item) => item.content);
       if (filePaths.length > 0) {
-        if (downloadsOnly) {
-          await copyDownloadPathsToClipboard(filePaths);
-        } else {
-          await copyFilePathsToClipboard(filePaths);
-        }
+        await copyDownloadPathsToClipboard(filePaths);
       } else {
         const nonDownloadIds = items
-          .filter((item) => selected.has(item.id) && !isFileBackedItem(item))
+          .filter((item) => selected.has(item.id) && !isDownloadItem(item))
           .map((item) => item.id);
         if (nonDownloadIds.length > 0) {
           await copyItemsToClipboard(nonDownloadIds);
@@ -165,7 +141,7 @@ export default function NotchShelf() {
       await copyItemsToClipboard(orderedIds);
     }
     setSelected(new Set());
-  }, [downloadsOnly, benchOnly, items, selected]);
+  }, [downloadsOnly, items, selected]);
 
   useEffect(() => {
     document.documentElement.classList.add("notch-shelf", "notch-shelf-dark");
@@ -178,71 +154,12 @@ export default function NotchShelf() {
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
       if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
       if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
-      if (dragCleanupTimerRef.current) clearTimeout(dragCleanupTimerRef.current);
     };
   }, [refreshPeek]);
 
   useEffect(() => {
     visibleItemsRef.current = items;
   }, [items]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(BENCH_STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as ClipboardItem[];
-      if (Array.isArray(parsed)) setBenchItems(parsed.slice(0, 6));
-    } catch {
-      localStorage.removeItem(BENCH_STORAGE_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(BENCH_STORAGE_KEY, JSON.stringify(benchItems));
-  }, [benchItems]);
-
-  useEffect(() => {
-    function cleanupDragState() {
-      if (dragCleanupTimerRef.current) {
-        clearTimeout(dragCleanupTimerRef.current);
-        dragCleanupTimerRef.current = null;
-      }
-      draggedItemRef.current = null;
-      setBenchDropActive(false);
-    }
-
-    window.addEventListener("dragend", cleanupDragState);
-    return () => {
-      window.removeEventListener("dragend", cleanupDragState);
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlistenDragDrop = getCurrentWindow().onDragDropEvent(
-      (event: { payload: TauriFileDropPayload }) => {
-        if (event.payload.type === "enter") {
-          if (event.payload.paths?.length) revealBenchDropTarget();
-          return;
-        }
-        if (event.payload.type === "over") {
-          setBenchDropActive(true);
-          return;
-        }
-        if (event.payload.type === "leave") {
-          if (!draggedItemRef.current) setBenchDropActive(false);
-          return;
-        }
-        setBenchDropActive(false);
-        if (event.payload.paths?.length) {
-          void addBenchPaths(event.payload.paths);
-        }
-      },
-    );
-
-    return () => {
-      unlistenDragDrop.then((fn) => fn());
-    };
-  }, [benchOnly]);
 
   useEffect(() => {
     const unlistenCopied = listen<NotchCopyFeedbackPayload>(
@@ -264,11 +181,11 @@ export default function NotchShelf() {
 
   useEffect(() => {
     setSelected(new Set());
-  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly]);
+  }, [activeCategory, favoritesOnly, downloadsOnly]);
 
   useEffect(() => {
     if (shelfOpen) loadItems();
-  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly, shelfOpen, loadItems]);
+  }, [activeCategory, favoritesOnly, downloadsOnly, shelfOpen, loadItems]);
 
   useEffect(() => {
     refreshMeta();
@@ -383,7 +300,6 @@ export default function NotchShelf() {
       const next = !prev;
       if (next) setActiveCategory(undefined);
       if (next) setDownloadsOnly(false);
-      if (next) setBenchOnly(false);
       return next;
     });
   }
@@ -393,19 +309,6 @@ export default function NotchShelf() {
       const next = !prev;
       if (next) {
         setFavoritesOnly(false);
-        setBenchOnly(false);
-        setActiveCategory(undefined);
-      }
-      return next;
-    });
-  }
-
-  function selectBench() {
-    setBenchOnly((prev) => {
-      const next = !prev;
-      if (next) {
-        setFavoritesOnly(false);
-        setDownloadsOnly(false);
         setActiveCategory(undefined);
       }
       return next;
@@ -415,7 +318,6 @@ export default function NotchShelf() {
   function selectCategory(id: number) {
     setFavoritesOnly(false);
     setDownloadsOnly(false);
-    setBenchOnly(false);
     const category = categories.find((cat) => cat.id === id);
     if (category?.name === "History") {
       setActiveCategory(undefined);
@@ -432,12 +334,8 @@ export default function NotchShelf() {
       await getCurrentWindow().hide();
       setExpanded(false);
     }
-    if ((downloadsOnly || benchOnly) && item && isFileBackedItem(item)) {
-      if (isDownloadItem(item)) {
-        await pasteDownloadByPath(item.content);
-      } else {
-        await pasteFileByPath(item.content);
-      }
+    if (downloadsOnly && item && isDownloadItem(item)) {
+      await pasteDownloadByPath(item.content);
     } else {
       await pasteItemById(id);
     }
@@ -445,12 +343,8 @@ export default function NotchShelf() {
 
   async function handleCopy(id: string) {
     const item = items.find((candidate) => candidate.id === id);
-    if ((downloadsOnly || benchOnly) && item && isFileBackedItem(item)) {
-      if (isDownloadItem(item)) {
-        await copyDownloadToClipboard(item.content, "Copied download");
-      } else {
-        await copyFilePathsToClipboard([item.content], "Copied file");
-      }
+    if (downloadsOnly && item && isDownloadItem(item)) {
+      await copyDownloadToClipboard(item.content, "Copied download");
     } else {
       await copyItemToClipboard(
         id,
@@ -461,156 +355,6 @@ export default function NotchShelf() {
 
   function isDownloadItem(item: ClipboardItem) {
     return item.id.startsWith("download:") || item.categoryId === -2;
-  }
-
-  function isFileBackedItem(item: ClipboardItem) {
-    return isDownloadItem(item) || item.id.startsWith("file:") || item.itemType === "file";
-  }
-
-  function addBenchItem(item: ClipboardItem) {
-    addBenchItems([item]);
-  }
-
-  function addBenchItems(nextItems: ClipboardItem[]) {
-    setBenchItems((prev) => {
-      const nextIds = new Set(nextItems.map((item) => item.id));
-      const withoutDuplicate = prev.filter((candidate) => !nextIds.has(candidate.id));
-      return [...nextItems, ...withoutDuplicate].slice(0, 6);
-    });
-    if (benchOnly) {
-      setItems((prev) => {
-        const nextIds = new Set(nextItems.map((item) => item.id));
-        const withoutDuplicate = prev.filter((candidate) => !nextIds.has(candidate.id));
-        return [...nextItems, ...withoutDuplicate].slice(0, 6);
-      });
-    }
-  }
-
-  async function addBenchPaths(paths: string[]) {
-    const fileItems = await fileItemsFromPaths(paths);
-    if (fileItems.length > 0) addBenchItems(fileItems);
-  }
-
-  function revealBenchDropTarget() {
-    cancelLeaveTimer();
-    if (hoverCloseTimerRef.current) {
-      clearTimeout(hoverCloseTimerRef.current);
-      hoverCloseTimerRef.current = null;
-    }
-    setHoverClosing(false);
-    setNotchHovered(true);
-    setBenchDropActive(true);
-    void setNotchHoverPreview(true);
-  }
-
-  function removeBenchItem(id: string) {
-    setBenchItems((prev) => prev.filter((item) => item.id !== id));
-    if (benchOnly) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
-    }
-  }
-
-  function clearBench() {
-    setBenchItems([]);
-    if (benchOnly) {
-      setItems([]);
-    }
-  }
-
-  function handleCardDragStart(item: ClipboardItem, event: DragEvent<HTMLElement>) {
-    if (dragCleanupTimerRef.current) {
-      clearTimeout(dragCleanupTimerRef.current);
-      dragCleanupTimerRef.current = null;
-    }
-    draggedItemRef.current = item;
-    setBenchDropActive(true);
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("application/x-clipflow-item-id", item.id);
-    event.dataTransfer.setData("text/plain", item.preview);
-  }
-
-  function handleCardDragEnd() {
-    if (dragCleanupTimerRef.current) clearTimeout(dragCleanupTimerRef.current);
-    dragCleanupTimerRef.current = setTimeout(() => {
-      draggedItemRef.current = null;
-      setBenchDropActive(false);
-      dragCleanupTimerRef.current = null;
-    }, 120);
-  }
-
-  function handleBenchDragOver(event: DragEvent<HTMLElement>) {
-    if (!draggedItemRef.current && !hasFileDrag(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setBenchDropActive(true);
-  }
-
-  function handleShelfDragOver(event: DragEvent<HTMLElement>) {
-    if (!draggedItemRef.current && !hasFileDrag(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setBenchDropActive(true);
-  }
-
-  function handleBenchDrop(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const filePaths = filePathsFromDataTransfer(event.dataTransfer);
-    if (filePaths.length > 0) {
-      void addBenchPaths(filePaths);
-      setBenchDropActive(false);
-      return;
-    }
-    const draggedId = event.dataTransfer.getData("application/x-clipflow-item-id");
-    const item =
-      draggedItemRef.current ??
-      visibleItemsRef.current.find((candidate) => candidate.id === draggedId) ??
-      benchItems.find((candidate) => candidate.id === draggedId);
-    if (dragCleanupTimerRef.current) {
-      clearTimeout(dragCleanupTimerRef.current);
-      dragCleanupTimerRef.current = null;
-    }
-    draggedItemRef.current = null;
-    setBenchDropActive(false);
-    if (item) addBenchItem(item);
-  }
-
-  function handleShelfDrop(event: DragEvent<HTMLElement>) {
-    if (!draggedItemRef.current && !hasFileDrag(event)) return;
-    handleBenchDrop(event);
-  }
-
-  async function handleBenchCopy(item: ClipboardItem) {
-    if (isDownloadItem(item)) {
-      await copyDownloadToClipboard(item.content, "Copied download");
-      return;
-    }
-    if (isFileBackedItem(item)) {
-      await copyFilePathsToClipboard([item.content], "Copied file");
-      return;
-    }
-    await copyItemToClipboard(
-      item.id,
-      `Copied ${itemTypeLabel(item.itemType).toLowerCase()}`,
-    );
-  }
-
-  async function handleBenchPaste(item: ClipboardItem) {
-    if (settings.notchHoverEnabled) {
-      await collapse();
-    } else {
-      await getCurrentWindow().hide();
-      setExpanded(false);
-    }
-    if (isDownloadItem(item)) {
-      await pasteDownloadByPath(item.content);
-      return;
-    }
-    if (isFileBackedItem(item)) {
-      await pasteFileByPath(item.content);
-      return;
-    }
-    await pasteItemById(item.id);
   }
 
   function handleToggleSelect(id: string) {
@@ -638,19 +382,8 @@ export default function NotchShelf() {
   }
 
   async function handleDelete(id: string) {
-    const item = items.find((candidate) => candidate.id === id);
-    if (item && isFileBackedItem(item)) {
-      removeBenchItem(id);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      return;
-    }
     await deleteItem(id);
     setItems((prev) => prev.filter((item) => item.id !== id));
-    removeBenchItem(id);
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -744,8 +477,6 @@ export default function NotchShelf() {
             "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]",
             hoverClosing && "notch-expanded-panel-exit",
           )}
-          onDragOver={handleShelfDragOver}
-          onDrop={handleShelfDrop}
         >
           <NotchHoverRail
             item={peekItem}
@@ -774,20 +505,6 @@ export default function NotchShelf() {
             </div>
           )}
 
-          {(benchItems.length > 0 || benchDropActive) && (
-            <NotchBench
-              items={benchItems}
-              dropActive={benchDropActive}
-              onDragOver={handleBenchDragOver}
-              onDragLeave={() => setBenchDropActive(Boolean(draggedItemRef.current))}
-              onDrop={handleBenchDrop}
-              onCopy={handleBenchCopy}
-              onPaste={handleBenchPaste}
-              onRemove={removeBenchItem}
-              onClear={clearBench}
-            />
-          )}
-
           <div className="notch-categories-enter flex items-center gap-2 overflow-x-auto px-6 pb-3 scrollbar-none">
             <FilterChip
               active={favoritesOnly}
@@ -802,16 +519,6 @@ export default function NotchShelf() {
               {t("favorites")}
             </FilterChip>
             <FilterChip
-              active={benchOnly}
-              onClick={selectBench}
-              icon={<Grid3X3 size={12} />}
-            >
-              {t("notchBench")}
-              {benchItems.length > 0 && (
-                <span className="ml-1 opacity-50">{benchItems.length}</span>
-              )}
-            </FilterChip>
-            <FilterChip
               active={downloadsOnly}
               onClick={selectDownloads}
               icon={<Download size={12} />}
@@ -823,7 +530,6 @@ export default function NotchShelf() {
                 key={cat.id}
                 active={
                   !downloadsOnly &&
-                  !benchOnly &&
                   !favoritesOnly &&
                   (cat.name === "History"
                     ? activeCategory === undefined
@@ -855,11 +561,7 @@ export default function NotchShelf() {
             )}
             {!loading && items.length === 0 && (
               <p className="py-8 text-center text-[12px] text-white/35">
-                {benchOnly
-                  ? t("notchBenchHint")
-                  : settings.capturePaused
-                    ? t("emptyPausedTitle")
-                    : t("emptyTitle")}
+                {settings.capturePaused ? t("emptyPausedTitle") : t("emptyTitle")}
               </p>
             )}
             <div className="flex h-full w-max gap-5">
@@ -884,8 +586,6 @@ export default function NotchShelf() {
                           onFavorite={handleFavorite}
                           onDelete={handleDelete}
                           onToggleSelect={handleToggleSelect}
-                          onDragStart={handleCardDragStart}
-                          onDragEnd={handleCardDragEnd}
                         />
                       </div>
                     ))}
@@ -925,128 +625,6 @@ function NotchCopyFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload })
         </p>
       </div>
     </div>
-  );
-}
-
-function hasFileDrag(event: DragEvent<HTMLElement>) {
-  return Array.from(event.dataTransfer.types).some((type) =>
-    ["Files", "text/uri-list", "public.file-url"].includes(type),
-  );
-}
-
-function filePathsFromDataTransfer(dataTransfer: DataTransfer) {
-  const uriList = dataTransfer.getData("text/uri-list");
-  if (!uriList) return [];
-  return uriList
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"))
-    .filter((line) => line.startsWith("file://"))
-    .map((line) => decodeURIComponent(line.replace(/^file:\/\//, "")));
-}
-
-function NotchBench({
-  items,
-  dropActive,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onCopy,
-  onPaste,
-  onRemove,
-  onClear,
-}: {
-  items: ClipboardItem[];
-  dropActive: boolean;
-  onDragOver: (event: DragEvent<HTMLElement>) => void;
-  onDragLeave: () => void;
-  onDrop: (event: DragEvent<HTMLElement>) => void;
-  onCopy: (item: ClipboardItem) => void;
-  onPaste: (item: ClipboardItem) => void;
-  onRemove: (id: string) => void;
-  onClear: () => void;
-}) {
-  const { t } = useI18n();
-
-  return (
-    <section
-      className="notch-bench-enter px-6 pb-3"
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      aria-label={t("notchBench")}
-    >
-      <div
-        className={cn(
-          "flex min-h-11 items-center gap-2 overflow-hidden rounded-[16px] border px-2.5 py-2 transition-[background-color,border-color,transform] duration-200",
-          dropActive
-            ? "border-white/35 bg-white/[0.13] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-            : "border-white/[0.08] bg-white/[0.055]",
-        )}
-      >
-        <span className="shrink-0 rounded-full bg-white/[0.08] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-white/50">
-          {t("notchBench")}
-        </span>
-        {items.length === 0 ? (
-          <p className="truncate text-[12px] font-medium text-white/44">
-            {dropActive ? t("dropToBench") : t("notchBenchHint")}
-          </p>
-        ) : (
-          <>
-            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto scrollbar-none">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex max-w-[210px] shrink-0 items-center rounded-full bg-white/[0.09] text-white/76 ring-1 ring-white/[0.06] transition-colors hover:bg-white/[0.14] hover:text-white"
-                >
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      void onCopy(item);
-                    }}
-                    onDoubleClick={(event) => {
-                      event.preventDefault();
-                      void onPaste(item);
-                    }}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-2 pr-1 text-left"
-                    title={`${t("copyToClipboard")} · ${t("paste")}`}
-                  >
-                    {isDownloadFileItem(item) ? (
-                      <FileIcon item={item} size="sm" />
-                    ) : (
-                      <AppIcon appName={item.sourceApp} size="sm" />
-                    )}
-                    <span className="truncate text-[11px] font-semibold">
-                      {getItemPeekLabel(item)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onRemove(item.id);
-                    }}
-                    className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white/34 transition-colors hover:bg-white/[0.12] hover:text-white/80"
-                    aria-label={t("removeFromBench")}
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={onClear}
-              className="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-white/38 transition-colors hover:bg-white/[0.08] hover:text-white/70"
-            >
-              {t("clear")}
-            </button>
-          </>
-        )}
-      </div>
-    </section>
   );
 }
 

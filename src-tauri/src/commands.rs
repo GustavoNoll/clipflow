@@ -188,14 +188,6 @@ pub fn list_recent_downloads(limit: Option<i64>) -> Result<Vec<ClipboardItem>, S
 }
 
 #[tauri::command]
-pub fn file_items_from_paths(paths: Vec<String>) -> Result<Vec<ClipboardItem>, String> {
-    existing_file_paths(paths)?
-        .into_iter()
-        .map(|path| file_item_from_path(&path))
-        .collect()
-}
-
-#[tauri::command]
 pub fn copy_download_to_clipboard(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -211,16 +203,6 @@ pub fn copy_download_paths_to_clipboard(
     paths: Vec<String>,
 ) -> Result<usize, String> {
     write_download_paths_to_clipboard(&app, &state.monitor, paths)
-}
-
-#[tauri::command]
-pub fn copy_file_paths_to_clipboard(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    paths: Vec<String>,
-) -> Result<usize, String> {
-    let paths = existing_file_paths(paths)?;
-    write_paths_to_clipboard(&app, &state.monitor, paths, "Files")
 }
 
 fn write_download_paths_to_clipboard(
@@ -267,21 +249,6 @@ pub fn paste_download_by_path(state: State<'_, AppState>, path: String) -> Resul
     }
 }
 
-#[tauri::command]
-pub fn paste_file_by_path(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    let path = existing_file_paths(vec![path])?
-        .into_iter()
-        .next()
-        .ok_or_else(|| "File not found".to_string())?;
-    let item = file_item_from_path(&path)?;
-    let settings = state.db.lock().get_settings().unwrap_or_default();
-    if settings.auto_paste {
-        paste_item(&item, &state.monitor).map_err(|e| e.to_string())
-    } else {
-        restore_to_clipboard(&item, &state.monitor).map_err(|e| e.to_string())
-    }
-}
-
 fn downloads_dir() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").map_err(|_| "HOME is unavailable".to_string())?;
     Ok(PathBuf::from(home).join("Downloads"))
@@ -300,23 +267,6 @@ fn existing_download_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, String> {
     }
     if result.is_empty() {
         return Err("No download files selected".to_string());
-    }
-    Ok(result)
-}
-
-fn existing_file_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, String> {
-    let mut result = Vec::new();
-    for path in paths {
-        let canonical = PathBuf::from(path)
-            .canonicalize()
-            .map_err(|e| e.to_string())?;
-        if !canonical.exists() {
-            return Err("File not found".to_string());
-        }
-        result.push(canonical);
-    }
-    if result.is_empty() {
-        return Err("No files selected".to_string());
     }
     Ok(result)
 }
@@ -354,42 +304,6 @@ fn download_item(
         mime_type: Some("application/octet-stream".to_string()),
         thumbnail: None,
         content_size: size,
-        created_at,
-        tags: vec![],
-    })
-}
-
-fn file_item_from_path(path: &PathBuf) -> Result<ClipboardItem, String> {
-    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
-    let modified = metadata.modified().map_err(|e| e.to_string())?;
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("File")
-        .to_string();
-    let source_app = path
-        .parent()
-        .and_then(|parent| parent.file_name())
-        .and_then(|name| name.to_str())
-        .unwrap_or("Files")
-        .to_string();
-    let created_at = chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339();
-    let content = path.to_string_lossy().to_string();
-    Ok(ClipboardItem {
-        id: format!("file:{}", hash_content(content.as_bytes())),
-        content,
-        preview: file_name.clone(),
-        item_type: ItemType::File.as_str().to_string(),
-        source_app: Some(source_app),
-        category_id: -3,
-        category_name: "Bench".to_string(),
-        is_favorite: false,
-        is_pinned: false,
-        pin_shortcut: None,
-        file_name: Some(file_name),
-        mime_type: Some("application/octet-stream".to_string()),
-        thumbnail: None,
-        content_size: metadata.len() as i64,
         created_at,
         tags: vec![],
     })
@@ -1141,34 +1055,4 @@ fn encode_png(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
         let _ = writer.write_image_data(rgba);
     }
     png_data
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn file_items_from_paths_creates_bench_file_items() {
-        let path = std::env::temp_dir().join(format!("clipflow-bench-drop-{}.txt", Uuid::new_v4()));
-        fs::write(&path, "bench file").expect("write temp bench file");
-
-        let items =
-            file_items_from_paths(vec![path.to_string_lossy().to_string()]).expect("file item");
-
-        fs::remove_file(&path).ok();
-
-        assert_eq!(items.len(), 1);
-        assert!(items[0].id.starts_with("file:"));
-        assert_eq!(items[0].item_type, "file");
-        assert_eq!(items[0].category_id, -3);
-        assert_eq!(items[0].category_name, "Bench");
-        assert_eq!(
-            items[0].file_name.as_deref(),
-            path.file_name().and_then(|name| name.to_str())
-        );
-        assert!(items[0]
-            .content
-            .ends_with(path.file_name().unwrap().to_str().unwrap()));
-    }
 }

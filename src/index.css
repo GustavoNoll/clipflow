@@ -160,7 +160,6 @@ html.notch-shelf-dark .notch-pill {
 
 .notch-rail-enter,
 .notch-actions-enter,
-.notch-bench-enter,
 .notch-categories-enter,
 .notch-groups-enter {
   animation: notch-content-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -168,7 +167,6 @@ html.notch-shelf-dark .notch-pill {
 
 .notch-expanded-panel-exit .notch-rail-enter,
 .notch-expanded-panel-exit .notch-actions-enter,
-.notch-expanded-panel-exit .notch-bench-enter,
 .notch-expanded-panel-exit .notch-categories-enter,
 .notch-expanded-panel-exit .notch-groups-enter,
 .notch-expanded-panel-exit .notch-item-card {
@@ -184,9 +182,6 @@ html.notch-shelf-dark .notch-pill {
   animation-delay: 300ms;
 }
 
-.notch-bench-enter {
-  animation-delay: 335ms;
-}
 
 .notch-categories-enter {
   animation-delay: 370ms;
