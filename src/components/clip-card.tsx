@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AppIcon } from "./app-icon";
+import { FileIcon, isDownloadFileItem } from "./file-icon";
 import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
 import {
   formatRelativeTimeForLanguage,
@@ -158,7 +159,11 @@ export function ClipCard({
           >
             <Check size={12} />
           </button>
-          <AppIcon appName={item.sourceApp} size="md" title={appLabel} />
+          {isDownloadFileItem(item) ? (
+            <FileIcon item={item} size="md" title={item.fileName ?? appLabel} />
+          ) : (
+            <AppIcon appName={item.sourceApp} size="md" title={appLabel} />
+          )}
           <div className="min-w-0">
             <p className="truncate text-xs font-medium text-[var(--color-text-secondary)]">
               {appLabel}

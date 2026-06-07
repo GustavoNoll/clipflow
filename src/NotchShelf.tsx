@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
+import { FileIcon, isDownloadFileItem } from "./components/file-icon";
 import { ShelfGridCard } from "./components/shelf-grid-card";
 import {
   createCategory,
@@ -57,6 +58,7 @@ export default function NotchShelf() {
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [downloadsOnly, setDownloadsOnly] = useState(false);
+  const [benchOnly, setBenchOnly] = useState(false);
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peekItem, setPeekItem] = useState<ClipboardItem | null>(null);
@@ -94,6 +96,10 @@ export default function NotchShelf() {
         setItems(downloads);
         return;
       }
+      if (benchOnly) {
+        setItems(benchItems);
+        return;
+      }
       const result = await listItems({
         categoryId: favoritesOnly ? undefined : activeCategory,
         favoritesOnly,
@@ -104,7 +110,7 @@ export default function NotchShelf() {
     } finally {
       setLoading(false);
     }
-  }, [activeCategory, favoritesOnly, downloadsOnly]);
+  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly, benchItems]);
 
   const collapse = useCallback(async () => {
     setExpanded(false);
@@ -127,15 +133,25 @@ export default function NotchShelf() {
       .filter((item) => selected.has(item.id))
       .map((item) => item.id);
     if (orderedIds.length === 0) return;
-    if (downloadsOnly) {
-      await copyDownloadPathsToClipboard(
-        items.filter((item) => selected.has(item.id)).map((item) => item.content),
-      );
+    if (downloadsOnly || benchOnly) {
+      const downloadPaths = items
+        .filter((item) => selected.has(item.id) && isDownloadItem(item))
+        .map((item) => item.content);
+      if (downloadPaths.length > 0) {
+        await copyDownloadPathsToClipboard(downloadPaths);
+      } else {
+        const nonDownloadIds = items
+          .filter((item) => selected.has(item.id) && !isDownloadItem(item))
+          .map((item) => item.id);
+        if (nonDownloadIds.length > 0) {
+          await copyItemsToClipboard(nonDownloadIds);
+        }
+      }
     } else {
       await copyItemsToClipboard(orderedIds);
     }
     setSelected(new Set());
-  }, [downloadsOnly, items, selected]);
+  }, [downloadsOnly, benchOnly, items, selected]);
 
   useEffect(() => {
     document.documentElement.classList.add("notch-shelf", "notch-shelf-dark");
@@ -194,11 +210,11 @@ export default function NotchShelf() {
 
   useEffect(() => {
     setSelected(new Set());
-  }, [activeCategory, favoritesOnly, downloadsOnly]);
+  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly]);
 
   useEffect(() => {
     if (shelfOpen) loadItems();
-  }, [activeCategory, favoritesOnly, downloadsOnly, shelfOpen, loadItems]);
+  }, [activeCategory, favoritesOnly, downloadsOnly, benchOnly, shelfOpen, loadItems]);
 
   useEffect(() => {
     refreshMeta();
@@ -313,6 +329,7 @@ export default function NotchShelf() {
       const next = !prev;
       if (next) setActiveCategory(undefined);
       if (next) setDownloadsOnly(false);
+      if (next) setBenchOnly(false);
       return next;
     });
   }
@@ -322,6 +339,19 @@ export default function NotchShelf() {
       const next = !prev;
       if (next) {
         setFavoritesOnly(false);
+        setBenchOnly(false);
+        setActiveCategory(undefined);
+      }
+      return next;
+    });
+  }
+
+  function selectBench() {
+    setBenchOnly((prev) => {
+      const next = !prev;
+      if (next) {
+        setFavoritesOnly(false);
+        setDownloadsOnly(false);
         setActiveCategory(undefined);
       }
       return next;
@@ -331,6 +361,7 @@ export default function NotchShelf() {
   function selectCategory(id: number) {
     setFavoritesOnly(false);
     setDownloadsOnly(false);
+    setBenchOnly(false);
     const category = categories.find((cat) => cat.id === id);
     if (category?.name === "History") {
       setActiveCategory(undefined);
@@ -347,7 +378,7 @@ export default function NotchShelf() {
       await getCurrentWindow().hide();
       setExpanded(false);
     }
-    if (downloadsOnly && item) {
+    if ((downloadsOnly || benchOnly) && item && isDownloadItem(item)) {
       await pasteDownloadByPath(item.content);
     } else {
       await pasteItemById(id);
@@ -356,7 +387,7 @@ export default function NotchShelf() {
 
   async function handleCopy(id: string) {
     const item = items.find((candidate) => candidate.id === id);
-    if (downloadsOnly && item) {
+    if ((downloadsOnly || benchOnly) && item && isDownloadItem(item)) {
       await copyDownloadToClipboard(item.content, "Copied download");
     } else {
       await copyItemToClipboard(
@@ -375,14 +406,26 @@ export default function NotchShelf() {
       const withoutDuplicate = prev.filter((candidate) => candidate.id !== item.id);
       return [item, ...withoutDuplicate].slice(0, 6);
     });
+    if (benchOnly) {
+      setItems((prev) => {
+        const withoutDuplicate = prev.filter((candidate) => candidate.id !== item.id);
+        return [item, ...withoutDuplicate].slice(0, 6);
+      });
+    }
   }
 
   function removeBenchItem(id: string) {
     setBenchItems((prev) => prev.filter((item) => item.id !== id));
+    if (benchOnly) {
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    }
   }
 
   function clearBench() {
     setBenchItems([]);
+    if (benchOnly) {
+      setItems([]);
+    }
   }
 
   function handleCardDragStart(item: ClipboardItem, event: DragEvent<HTMLElement>) {
@@ -468,6 +511,8 @@ export default function NotchShelf() {
   }
 
   async function handleFavorite(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (item && isDownloadItem(item)) return;
     await toggleFavorite(id);
     setItems((prev) =>
       prev.map((item) =>
@@ -478,6 +523,16 @@ export default function NotchShelf() {
   }
 
   async function handleDelete(id: string) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (item && isDownloadItem(item)) {
+      removeBenchItem(id);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
     await deleteItem(id);
     setItems((prev) => prev.filter((item) => item.id !== id));
     removeBenchItem(id);
@@ -584,8 +639,8 @@ export default function NotchShelf() {
             className="notch-rail-enter"
           />
 
-          <div className="notch-actions-enter flex min-h-10 items-center justify-end gap-2 px-6 pt-3 pb-2.5">
-            {selected.size > 0 && (
+          {selected.size > 0 && (
+            <div className="notch-actions-enter flex min-h-10 items-center justify-end gap-2 px-6 pt-3 pb-2.5">
               <button
                 type="button"
                 onClick={(event) => {
@@ -599,9 +654,8 @@ export default function NotchShelf() {
                 <Copy size={14} />
                 {t("copySelected")}
               </button>
-            )}
-            <ActionButton icon={<Star size={16} fill="currentColor" />} label={t("favorites")} onClick={selectFavorites} active={favoritesOnly} />
-          </div>
+            </div>
+          )}
 
           {(benchItems.length > 0 || benchDropActive) && (
             <NotchBench
@@ -631,6 +685,16 @@ export default function NotchShelf() {
               {t("favorites")}
             </FilterChip>
             <FilterChip
+              active={benchOnly}
+              onClick={selectBench}
+              icon={<Grid3X3 size={12} />}
+            >
+              {t("notchBench")}
+              {benchItems.length > 0 && (
+                <span className="ml-1 opacity-50">{benchItems.length}</span>
+              )}
+            </FilterChip>
+            <FilterChip
               active={downloadsOnly}
               onClick={selectDownloads}
               icon={<Download size={12} />}
@@ -642,6 +706,7 @@ export default function NotchShelf() {
                 key={cat.id}
                 active={
                   !downloadsOnly &&
+                  !benchOnly &&
                   !favoritesOnly &&
                   (cat.name === "History"
                     ? activeCategory === undefined
@@ -673,7 +738,11 @@ export default function NotchShelf() {
             )}
             {!loading && items.length === 0 && (
               <p className="py-8 text-center text-[12px] text-white/35">
-                {settings.capturePaused ? t("emptyPausedTitle") : t("emptyTitle")}
+                {benchOnly
+                  ? t("notchBenchHint")
+                  : settings.capturePaused
+                    ? t("emptyPausedTitle")
+                    : t("emptyTitle")}
               </p>
             )}
             <div className="flex h-full w-max gap-5">
@@ -809,7 +878,11 @@ function NotchBench({
                     className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-2 pr-1 text-left"
                     title={`${t("copyToClipboard")} · ${t("paste")}`}
                   >
-                    <AppIcon appName={item.sourceApp} size="sm" />
+                    {isDownloadFileItem(item) ? (
+                      <FileIcon item={item} size="sm" />
+                    ) : (
+                      <AppIcon appName={item.sourceApp} size="sm" />
+                    )}
                     <span className="truncate text-[11px] font-semibold">
                       {getItemPeekLabel(item)}
                     </span>
@@ -840,32 +913,6 @@ function NotchBench({
         )}
       </div>
     </section>
-  );
-}
-
-function ActionButton({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        "flex h-9 w-9 items-center justify-center rounded-full text-white/62 transition-colors",
-        active ? "bg-white text-black" : "bg-white/[0.09] hover:bg-white/[0.14] hover:text-white/88",
-      )}
-    >
-      {icon}
-    </button>
   );
 }
 
@@ -967,6 +1014,10 @@ function NotchHoverRail({
 }
 
 function NotchRailIcon({ item }: { item: ClipboardItem }) {
+  if (isDownloadFileItem(item)) {
+    return <FileIcon item={item} size="sm" />;
+  }
+
   if (item.itemType === "image" && item.sourceApp) {
     return <AppIcon appName={item.sourceApp} size="sm" />;
   }
@@ -1015,6 +1066,8 @@ function CollapsedPeek({ item }: { item: ClipboardItem | null }) {
           className="h-[18px] w-[18px] rounded-[4px] border border-white/10"
           style={{ backgroundColor: item.content.trim() }}
         />
+      ) : isDownloadFileItem(item) ? (
+        <FileIcon item={item} size="sm" />
       ) : (
         <AppIcon appName={item.sourceApp} size="sm" />
       )}

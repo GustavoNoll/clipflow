@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Download, Heart, Search } from "lucide-react";
 import { AppIcon } from "./components/app-icon";
+import { FileIcon, isDownloadFileItem } from "./components/file-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
   applyFirstSearchFilterSuggestion,
@@ -534,7 +535,11 @@ function QuickRow({
         />
       ) : (
         <div className="absolute left-2 top-2">
-          <AppIcon appName={item.sourceApp} size="sm" title={appLabel} />
+          {isDownloadFileItem(item) ? (
+            <FileIcon item={item} size="sm" title={item.fileName ?? appLabel} />
+          ) : (
+            <AppIcon appName={item.sourceApp} size="sm" title={appLabel} />
+          )}
         </div>
       )}
 

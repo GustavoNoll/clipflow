@@ -1,4 +1,5 @@
 import { AppIcon } from "./app-icon";
+import { FileIcon, isDownloadFileItem } from "./file-icon";
 import { formatRelativeTimeForLanguage } from "../lib/i18n";
 import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
 import { useSettings } from "../lib/settings-context";
@@ -34,11 +35,15 @@ export function ItemMetaFooter({
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <AppIcon
-          appName={item.sourceApp}
-          size={compact ? "xs" : "sm"}
-          title={appLabel}
-        />
+        {isDownloadFileItem(item) ? (
+          <FileIcon item={item} size={compact ? "xs" : "sm"} title={item.fileName ?? appLabel} />
+        ) : (
+          <AppIcon
+            appName={item.sourceApp}
+            size={compact ? "xs" : "sm"}
+            title={appLabel}
+          />
+        )}
         <span
           className={cn(
             "truncate",
