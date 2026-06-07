@@ -18,9 +18,11 @@ import {
   createCategory,
   copyDownloadPathsToClipboard,
   copyDownloadToClipboard,
+  copyFilePathsToClipboard,
   copyItemToClipboard,
   copyItemsToClipboard,
   deleteItem,
+  fileItemsFromPaths,
   getContextualRecent,
   itemTypeLabel,
   listCategories,
@@ -28,6 +30,7 @@ import {
   listRecentDownloads,
   openLibraryWindow,
   pasteDownloadByPath,
+  pasteFileByPath,
   pasteItemById,
   setNotchExpanded,
   setNotchHoverPreview,
@@ -47,6 +50,10 @@ interface NotchCopyFeedbackPayload {
   labels: string[];
   firstItemType: string;
   firstSourceApp?: string | null;
+}
+
+interface TauriFileDropPayload {
+  paths?: string[];
 }
 
 export default function NotchShelf() {
@@ -134,14 +141,18 @@ export default function NotchShelf() {
       .map((item) => item.id);
     if (orderedIds.length === 0) return;
     if (downloadsOnly || benchOnly) {
-      const downloadPaths = items
-        .filter((item) => selected.has(item.id) && isDownloadItem(item))
+      const filePaths = items
+        .filter((item) => selected.has(item.id) && isFileBackedItem(item))
         .map((item) => item.content);
-      if (downloadPaths.length > 0) {
-        await copyDownloadPathsToClipboard(downloadPaths);
+      if (filePaths.length > 0) {
+        if (downloadsOnly) {
+          await copyDownloadPathsToClipboard(filePaths);
+        } else {
+          await copyFilePathsToClipboard(filePaths);
+        }
       } else {
         const nonDownloadIds = items
-          .filter((item) => selected.has(item.id) && !isDownloadItem(item))
+          .filter((item) => selected.has(item.id) && !isFileBackedItem(item))
           .map((item) => item.id);
         if (nonDownloadIds.length > 0) {
           await copyItemsToClipboard(nonDownloadIds);
@@ -183,12 +194,44 @@ export default function NotchShelf() {
     }
 
     window.addEventListener("dragend", cleanupDragState);
-    window.addEventListener("drop", cleanupDragState);
     return () => {
       window.removeEventListener("dragend", cleanupDragState);
-      window.removeEventListener("drop", cleanupDragState);
     };
   }, []);
+
+  useEffect(() => {
+    const unlistenDragEnter = listen<TauriFileDropPayload>(
+      "tauri://drag-enter",
+      (event) => {
+        if (event.payload.paths?.length) revealBenchDropTarget();
+      },
+    );
+    const unlistenDragOver = listen<TauriFileDropPayload>(
+      "tauri://drag-over",
+      (event) => {
+        if (event.payload.paths?.length) revealBenchDropTarget();
+      },
+    );
+    const unlistenDragLeave = listen("tauri://drag-leave", () => {
+      if (!draggedItemRef.current) setBenchDropActive(false);
+    });
+    const unlistenDrop = listen<TauriFileDropPayload>(
+      "tauri://drag-drop",
+      (event) => {
+        setBenchDropActive(false);
+        if (event.payload.paths?.length) {
+          void addBenchPaths(event.payload.paths);
+        }
+      },
+    );
+
+    return () => {
+      unlistenDragEnter.then((fn) => fn());
+      unlistenDragOver.then((fn) => fn());
+      unlistenDragLeave.then((fn) => fn());
+      unlistenDrop.then((fn) => fn());
+    };
+  }, [benchOnly]);
 
   useEffect(() => {
     const unlistenCopied = listen<NotchCopyFeedbackPayload>(
@@ -378,8 +421,12 @@ export default function NotchShelf() {
       await getCurrentWindow().hide();
       setExpanded(false);
     }
-    if ((downloadsOnly || benchOnly) && item && isDownloadItem(item)) {
-      await pasteDownloadByPath(item.content);
+    if ((downloadsOnly || benchOnly) && item && isFileBackedItem(item)) {
+      if (isDownloadItem(item)) {
+        await pasteDownloadByPath(item.content);
+      } else {
+        await pasteFileByPath(item.content);
+      }
     } else {
       await pasteItemById(id);
     }
@@ -387,8 +434,12 @@ export default function NotchShelf() {
 
   async function handleCopy(id: string) {
     const item = items.find((candidate) => candidate.id === id);
-    if ((downloadsOnly || benchOnly) && item && isDownloadItem(item)) {
-      await copyDownloadToClipboard(item.content, "Copied download");
+    if ((downloadsOnly || benchOnly) && item && isFileBackedItem(item)) {
+      if (isDownloadItem(item)) {
+        await copyDownloadToClipboard(item.content, "Copied download");
+      } else {
+        await copyFilePathsToClipboard([item.content], "Copied file");
+      }
     } else {
       await copyItemToClipboard(
         id,
@@ -401,17 +452,44 @@ export default function NotchShelf() {
     return item.id.startsWith("download:") || item.categoryId === -2;
   }
 
+  function isFileBackedItem(item: ClipboardItem) {
+    return isDownloadItem(item) || item.id.startsWith("file:") || item.itemType === "file";
+  }
+
   function addBenchItem(item: ClipboardItem) {
+    addBenchItems([item]);
+  }
+
+  function addBenchItems(nextItems: ClipboardItem[]) {
     setBenchItems((prev) => {
-      const withoutDuplicate = prev.filter((candidate) => candidate.id !== item.id);
-      return [item, ...withoutDuplicate].slice(0, 6);
+      const nextIds = new Set(nextItems.map((item) => item.id));
+      const withoutDuplicate = prev.filter((candidate) => !nextIds.has(candidate.id));
+      return [...nextItems, ...withoutDuplicate].slice(0, 6);
     });
     if (benchOnly) {
       setItems((prev) => {
-        const withoutDuplicate = prev.filter((candidate) => candidate.id !== item.id);
-        return [item, ...withoutDuplicate].slice(0, 6);
+        const nextIds = new Set(nextItems.map((item) => item.id));
+        const withoutDuplicate = prev.filter((candidate) => !nextIds.has(candidate.id));
+        return [...nextItems, ...withoutDuplicate].slice(0, 6);
       });
     }
+  }
+
+  async function addBenchPaths(paths: string[]) {
+    const fileItems = await fileItemsFromPaths(paths);
+    if (fileItems.length > 0) addBenchItems(fileItems);
+  }
+
+  function revealBenchDropTarget() {
+    cancelLeaveTimer();
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+    setHoverClosing(false);
+    setNotchHovered(true);
+    setBenchDropActive(true);
+    void setNotchHoverPreview(true);
   }
 
   function removeBenchItem(id: string) {
@@ -450,7 +528,14 @@ export default function NotchShelf() {
   }
 
   function handleBenchDragOver(event: DragEvent<HTMLElement>) {
-    if (!draggedItemRef.current) return;
+    if (!draggedItemRef.current && !hasFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setBenchDropActive(true);
+  }
+
+  function handleShelfDragOver(event: DragEvent<HTMLElement>) {
+    if (!draggedItemRef.current && !hasFileDrag(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setBenchDropActive(true);
@@ -459,6 +544,12 @@ export default function NotchShelf() {
   function handleBenchDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     event.stopPropagation();
+    const filePaths = filePathsFromDataTransfer(event.dataTransfer);
+    if (filePaths.length > 0) {
+      void addBenchPaths(filePaths);
+      setBenchDropActive(false);
+      return;
+    }
     const draggedId = event.dataTransfer.getData("application/x-clipflow-item-id");
     const item =
       draggedItemRef.current ??
@@ -473,9 +564,18 @@ export default function NotchShelf() {
     if (item) addBenchItem(item);
   }
 
+  function handleShelfDrop(event: DragEvent<HTMLElement>) {
+    if (!draggedItemRef.current && !hasFileDrag(event)) return;
+    handleBenchDrop(event);
+  }
+
   async function handleBenchCopy(item: ClipboardItem) {
     if (isDownloadItem(item)) {
       await copyDownloadToClipboard(item.content, "Copied download");
+      return;
+    }
+    if (isFileBackedItem(item)) {
+      await copyFilePathsToClipboard([item.content], "Copied file");
       return;
     }
     await copyItemToClipboard(
@@ -493,6 +593,10 @@ export default function NotchShelf() {
     }
     if (isDownloadItem(item)) {
       await pasteDownloadByPath(item.content);
+      return;
+    }
+    if (isFileBackedItem(item)) {
+      await pasteFileByPath(item.content);
       return;
     }
     await pasteItemById(item.id);
@@ -524,7 +628,7 @@ export default function NotchShelf() {
 
   async function handleDelete(id: string) {
     const item = items.find((candidate) => candidate.id === id);
-    if (item && isDownloadItem(item)) {
+    if (item && isFileBackedItem(item)) {
       removeBenchItem(id);
       setSelected((prev) => {
         const next = new Set(prev);
@@ -629,6 +733,8 @@ export default function NotchShelf() {
             "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]",
             hoverClosing && "notch-expanded-panel-exit",
           )}
+          onDragOver={handleShelfDragOver}
+          onDrop={handleShelfDrop}
         >
           <NotchHoverRail
             item={peekItem}
@@ -809,6 +915,23 @@ function NotchCopyFeedback({ feedback }: { feedback: NotchCopyFeedbackPayload })
       </div>
     </div>
   );
+}
+
+function hasFileDrag(event: DragEvent<HTMLElement>) {
+  return Array.from(event.dataTransfer.types).some((type) =>
+    ["Files", "text/uri-list", "public.file-url"].includes(type),
+  );
+}
+
+function filePathsFromDataTransfer(dataTransfer: DataTransfer) {
+  const uriList = dataTransfer.getData("text/uri-list");
+  if (!uriList) return [];
+  return uriList
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .filter((line) => line.startsWith("file://"))
+    .map((line) => decodeURIComponent(line.replace(/^file:\/\//, "")));
 }
 
 function NotchBench({

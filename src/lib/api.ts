@@ -52,6 +52,10 @@ export async function listRecentDownloads(limit = 12): Promise<ClipboardItem[]> 
   return invoke("list_recent_downloads", { limit });
 }
 
+export async function fileItemsFromPaths(paths: string[]): Promise<ClipboardItem[]> {
+  return invoke("file_items_from_paths", { paths });
+}
+
 export async function deleteItem(id: string): Promise<void> {
   return invoke("delete_item", { id });
 }
@@ -208,6 +212,30 @@ export async function copyDownloadPathsToClipboard(
   );
 }
 
+export async function copyFilePathsToClipboard(
+  paths: string[],
+  message?: string,
+): Promise<void> {
+  let copiedCount = paths.length;
+  try {
+    copiedCount = await invoke<number>("copy_file_paths_to_clipboard", { paths });
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "File copy failed",
+      }),
+    );
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("clipflow:clipboard-feedback", {
+      detail:
+        message ??
+        (copiedCount === 1 ? "Copied 1 file" : `Copied ${copiedCount} files`),
+    }),
+  );
+}
+
 export async function copyTextToClipboard(text: string, message?: string): Promise<void> {
   await invoke("copy_text_to_clipboard", { text });
   window.dispatchEvent(
@@ -224,6 +252,18 @@ export async function pasteDownloadByPath(path: string): Promise<void> {
     window.dispatchEvent(
       new CustomEvent("clipflow:clipboard-feedback", {
         detail: "Download paste failed",
+      }),
+    );
+  }
+}
+
+export async function pasteFileByPath(path: string): Promise<void> {
+  try {
+    await invoke("paste_file_by_path", { path });
+  } catch {
+    window.dispatchEvent(
+      new CustomEvent("clipflow:clipboard-feedback", {
+        detail: "File paste failed",
       }),
     );
   }
