@@ -69,63 +69,53 @@ pub fn hash_content(data: &[u8]) -> String {
 
 #[cfg(target_os = "macos")]
 pub mod platform {
+    use objc2::rc::Retained;
+    use objc2::runtime::ProtocolObject;
+    use objc2::ClassType;
+    use objc2_app_kit::{NSPasteboard, NSPasteboardWriting};
+    use objc2_foundation::{NSArray, NSURL};
+
     pub fn write_file_urls(paths: &[std::path::PathBuf]) -> Result<(), String> {
         if paths.is_empty() {
             return Err("no files to copy".to_string());
         }
 
-        let mut script = String::from("set theFiles to {}\n");
-        for path in paths {
-            let escaped = path
-                .to_string_lossy()
-                .replace('\\', "\\\\")
-                .replace('"', "\\\"");
-            script.push_str(&format!(
-                "set end of theFiles to (POSIX file \"{}\" as alias)\n",
-                escaped
-            ));
-        }
-        script.push_str("set the clipboard to theFiles\n");
-
-        let output = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output()
-            .map_err(|e| e.to_string())?;
-        if output.status.success() {
+        let urls = paths
+            .iter()
+            .map(|path| {
+                NSURL::from_file_path(path)
+                    .ok_or_else(|| format!("invalid file URL: {}", path.display()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let objects: Vec<Retained<ProtocolObject<dyn NSPasteboardWriting>>> = urls
+            .into_iter()
+            .map(ProtocolObject::from_retained)
+            .collect();
+        let array = NSArray::from_retained_slice(&objects);
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        if pasteboard.writeObjects(&array) {
             Ok(())
         } else {
-            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+            Err("failed to write file URLs to pasteboard".to_string())
         }
     }
 
     pub fn read_file_urls() -> Vec<String> {
-        let script = r#"
-            set output to ""
-            try
-                set fileList to the clipboard as alias list
-                repeat with f in fileList
-                    set output to output & (POSIX path of f) & linefeed
-                end repeat
-            end try
-            return output
-        "#;
-        let output = match std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output()
-        {
-            Ok(o) => o,
-            Err(_) => return vec![],
-        };
-        if !output.status.success() {
+        let classes = NSArray::from_slice(&[NSURL::class()]);
+        let pasteboard = NSPasteboard::generalPasteboard();
+        let Some(objects) = (unsafe { pasteboard.readObjectsForClasses_options(&classes, None) })
+        else {
             return vec![];
-        }
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::trim)
-            .filter(|l| !l.is_empty())
-            .map(str::to_string)
+        };
+        objects
+            .iter()
+            .filter_map(|object| {
+                object
+                    .downcast_ref::<NSURL>()
+                    .and_then(|url| url.to_file_path())
+            })
+            .map(|path| path.to_string_lossy().to_string())
             .collect()
     }
 

@@ -37,7 +37,7 @@ fn notch_dimensions(layout: &NotchLayout, expanded: bool, hover_preview: bool) -
 }
 
 pub fn show_copy_feedback(app: &tauri::AppHandle) {
-    if !is_notch_click_mode(app) || is_shelf_expanded() || is_hover_preview_active() {
+    if is_shelf_expanded() || is_hover_preview_active() {
         return;
     }
 
@@ -55,13 +55,14 @@ pub fn show_copy_feedback(app: &tauri::AppHandle) {
         std::thread::sleep(Duration::from_millis(COPY_FEEDBACK_MS));
         let restore_app = app.clone();
         let _ = app.run_on_main_thread(move || {
-            if !is_notch_click_mode(&restore_app)
-                || is_shelf_expanded()
-                || is_hover_preview_active()
-            {
+            if is_shelf_expanded() || is_hover_preview_active() {
                 return;
             }
-            show_collapsed_on_main(&restore_app);
+            if is_notch_click_mode(&restore_app) {
+                show_collapsed_on_main(&restore_app);
+            } else {
+                hide_notch_shelf(&restore_app);
+            }
         });
     });
 }

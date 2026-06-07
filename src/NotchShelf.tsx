@@ -142,7 +142,7 @@ export default function NotchShelf() {
 
   useEffect(() => {
     const unlistenCopied = listen<NotchCopyFeedbackPayload>(
-      "clipboard:item-copied",
+      "notch-shelf:copy-feedback",
       (event) => {
         if (copyFeedbackTimerRef.current) clearTimeout(copyFeedbackTimerRef.current);
         setCopyFeedback(event.payload);

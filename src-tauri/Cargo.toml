@@ -1,6 +1,6 @@
 [package]
 name = "clipflow"
-version = "0.1.10"
+version = "0.1.11"
 description = "Clipboard Manager for macOS"
 authors = ["gustavonoll"]
 edition = "2021"
@@ -37,8 +37,8 @@ tauri-plugin-process = "2"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-graphics = "0.24"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSColor", "NSResponder", "NSWorkspace", "NSRunningApplication", "NSEvent"] }
-objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSColor", "NSResponder", "NSWorkspace", "NSRunningApplication", "NSEvent", "NSPasteboard", "NSPasteboardItem"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSArray", "NSString", "NSURL"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"

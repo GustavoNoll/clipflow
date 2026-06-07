@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
 use crate::app_icon::AppIconCache;
@@ -391,7 +391,10 @@ pub fn copy_items_to_clipboard(
 
 fn emit_copy_feedback(app: &tauri::AppHandle, payload: CopyFeedbackPayload) {
     crate::notch::show_copy_feedback(app);
-    let _ = app.emit("clipboard:item-copied", payload);
+    let _ = app.emit("clipboard:item-copied", &payload);
+    if let Some(win) = app.get_webview_window("notch-shelf") {
+        let _ = win.emit("notch-shelf:copy-feedback", payload);
+    }
 }
 
 fn copy_feedback_for_item(item: &ClipboardItem) -> CopyFeedbackPayload {
