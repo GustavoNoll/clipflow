@@ -30,12 +30,14 @@ import { getItemPeekLabel } from "./lib/item-label";
 import { groupItemsByDate } from "./lib/date-groups";
 import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
+import { translateCategoryName, useI18n } from "./lib/i18n";
 import { useUpdateStatus } from "./lib/update-status-context";
 import type { Category, ClipboardItem } from "./lib/types";
 import { cn } from "./lib/utils";
 
 export default function NotchShelf() {
   const { settings } = useSettings();
+  const { t } = useI18n();
   const { update } = useUpdateStatus();
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
@@ -71,7 +73,7 @@ export default function NotchShelf() {
         query: debouncedQuery || undefined,
         categoryId: favoritesOnly ? undefined : activeCategory,
         favoritesOnly,
-        limit: 24,
+        limit: 18,
         offset: 0,
       });
       setItems(result.items);
@@ -328,7 +330,7 @@ export default function NotchShelf() {
       )}
 
       {!shelfVisible && !settings.notchHoverEnabled && (
-        <div className="flex h-full w-full items-center justify-center bg-black">
+        <div className="flex h-full w-full items-center justify-center bg-black/82 backdrop-blur-xl">
           <CollapsedPeek item={peekItem} />
         </div>
       )}
@@ -336,7 +338,7 @@ export default function NotchShelf() {
       {shelfVisible && (
         <div
           className={cn(
-            "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] bg-black pt-[34px]",
+            "notch-expanded-panel relative flex h-full w-full flex-col overflow-hidden rounded-b-[24px] border-x border-b border-white/[0.06] bg-black/82 pt-[34px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-2xl",
             hoverClosing && "notch-expanded-panel-exit",
           )}
         >
@@ -348,18 +350,18 @@ export default function NotchShelf() {
           />
 
           <div className="notch-search-enter flex items-center justify-between gap-3 px-6 pt-3 pb-2.5">
-            <div className="relative w-full max-w-[420px]">
-              <Search size={16} className="absolute left-0 top-1/2 -translate-y-1/2 text-white/38" />
+            <div className="relative w-full max-w-[420px] rounded-full bg-white/[0.045] px-3 ring-1 ring-white/[0.06] backdrop-blur-xl">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/38" />
               <input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
+                placeholder={t("searchClipboard")}
                 className="w-full border-0 bg-transparent py-1 pl-7 pr-2 text-[16px] font-semibold tracking-tight text-white/88 outline-none placeholder:text-white/42"
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <ActionButton icon={<Star size={16} fill="currentColor" />} label="Favorites" onClick={selectFavorites} active={favoritesOnly} />
+              <ActionButton icon={<Star size={16} fill="currentColor" />} label={t("favorites")} onClick={selectFavorites} active={favoritesOnly} />
             </div>
           </div>
 
@@ -374,7 +376,7 @@ export default function NotchShelf() {
                 />
               }
             >
-              Favorites
+              {t("favorites")}
             </FilterChip>
             {categories.map((cat) => (
               <FilterChip
@@ -387,7 +389,7 @@ export default function NotchShelf() {
                 }
                 onClick={() => selectCategory(cat.id)}
               >
-                {cat.name}
+                {translateCategoryName(settings.language, cat.name)}
                 {cat.itemCount > 0 && (
                   <span className="ml-1 opacity-50">{cat.itemCount}</span>
                 )}
@@ -397,7 +399,7 @@ export default function NotchShelf() {
               type="button"
               onClick={handleCreateCategory}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.09] text-white/62 transition-colors hover:bg-white/[0.14] hover:text-white/85"
-              aria-label="Add category"
+              aria-label={t("newCategory")}
             >
               <Plus size={18} />
             </button>
@@ -406,12 +408,12 @@ export default function NotchShelf() {
           <div className="notch-groups-enter min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-6 pb-6 scrollbar-thin">
             {loading && items.length === 0 && (
               <p className="py-8 text-center text-[12px] text-white/35">
-                Loading…
+                {t("loadingMore")}
               </p>
             )}
             {!loading && items.length === 0 && (
               <p className="py-8 text-center text-[12px] text-white/35">
-                {settings.capturePaused ? "Capture paused" : "Nothing here yet"}
+                {settings.capturePaused ? t("emptyPausedTitle") : t("emptyTitle")}
               </p>
             )}
             <div className="flex h-full w-max gap-5">
@@ -487,6 +489,8 @@ function NotchHoverRail({
   updateVersion?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
+
   return (
     <div
       className={cn(
@@ -522,8 +526,8 @@ function NotchHoverRail({
               onOpenLibrary?.();
             }}
             className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/15 transition-colors hover:bg-amber-400/25 hover:text-amber-200"
-            aria-label={`ClipFlow ${updateVersion} update available`}
-            title={`ClipFlow ${updateVersion} update available`}
+            aria-label={t("versionAvailable", { version: updateVersion })}
+            title={t("versionAvailable", { version: updateVersion })}
           >
             <CircleArrowUp size={13} />
           </button>
@@ -537,7 +541,7 @@ function NotchHoverRail({
               onOpenLibrary();
             }}
             className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.10] text-white/70 transition-colors hover:bg-white/[0.18] hover:text-white"
-            aria-label="Open ClipFlow window"
+            aria-label={t("openSettings")}
           >
             <ArrowUpRight size={13} />
           </button>

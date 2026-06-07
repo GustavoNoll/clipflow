@@ -28,6 +28,18 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+const QUICK_PASTE_WIDTH: f64 = 520.0;
+const QUICK_PASTE_HEIGHT: f64 = 420.0;
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn clipflow_place_quick_paste_near_cursor(
+        window: *mut std::ffi::c_void,
+        width: f64,
+        height: f64,
+    );
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let db = Arc::new(Mutex::new(
@@ -105,7 +117,7 @@ pub fn run() {
                 }
             }
 
-            if let Err(err) = register_shortcuts(app) {
+            if let Err(err) = register_shortcuts(app.handle()) {
                 eprintln!("ClipFlow: global shortcuts unavailable ({err})");
             }
 
@@ -127,6 +139,9 @@ pub fn run() {
             commands::delete_items,
             commands::clear_history,
             commands::toggle_favorite,
+            commands::set_items_favorite,
+            commands::set_items_pinned,
+            commands::set_pin_shortcut,
             commands::set_item_category,
             commands::list_categories,
             commands::create_category,
@@ -259,21 +274,31 @@ fn toggle_launcher(app: &tauri::AppHandle) {
     }
 }
 
-fn register_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let handle = app.handle();
+pub(crate) fn register_shortcuts(
+    handle: &tauri::AppHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
     let gs = handle.global_shortcut();
+    let settings = {
+        let state = handle.state::<AppState>();
+        let settings = state.db.lock().get_settings().unwrap_or_default();
+        settings
+    };
+    let _ = gs.unregister_all();
 
-    let notch_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SUPER), Code::KeyV);
+    let notch_shortcut = parse_shortcut(&settings.launcher_shortcut)
+        .unwrap_or_else(|| Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SUPER), Code::KeyV));
     gs.on_shortcut(notch_shortcut, |app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
             toggle_launcher(app);
         }
     })?;
 
-    let quick_paste = Shortcut::new(
-        Some(Modifiers::CONTROL | Modifiers::SHIFT | Modifiers::SUPER),
-        Code::KeyV,
-    );
+    let quick_paste = parse_shortcut(&settings.quick_paste_shortcut).unwrap_or_else(|| {
+        Shortcut::new(
+            Some(Modifiers::CONTROL | Modifiers::SHIFT | Modifiers::SUPER),
+            Code::KeyV,
+        )
+    });
     gs.on_shortcut(quick_paste, |app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
             toggle_quick_paste(app);
@@ -305,6 +330,73 @@ fn register_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>
     }
 
     Ok(())
+}
+
+fn parse_shortcut(raw: &str) -> Option<Shortcut> {
+    let mut modifiers = Modifiers::empty();
+    let mut code = None;
+
+    for part in raw.split('+').map(str::trim).filter(|part| !part.is_empty()) {
+        match part.to_ascii_lowercase().as_str() {
+            "control" | "ctrl" => modifiers |= Modifiers::CONTROL,
+            "shift" => modifiers |= Modifiers::SHIFT,
+            "alt" | "option" => modifiers |= Modifiers::ALT,
+            "meta" | "cmd" | "command" | "super" => modifiers |= Modifiers::SUPER,
+            key => code = parse_key_code(key),
+        }
+    }
+
+    code.map(|code| {
+        let modifiers = if modifiers.is_empty() {
+            None
+        } else {
+            Some(modifiers)
+        };
+        Shortcut::new(modifiers, code)
+    })
+}
+
+fn parse_key_code(key: &str) -> Option<Code> {
+    match key {
+        "keya" | "a" => Some(Code::KeyA),
+        "keyb" | "b" => Some(Code::KeyB),
+        "keyc" | "c" => Some(Code::KeyC),
+        "keyd" | "d" => Some(Code::KeyD),
+        "keye" | "e" => Some(Code::KeyE),
+        "keyf" | "f" => Some(Code::KeyF),
+        "keyg" | "g" => Some(Code::KeyG),
+        "keyh" | "h" => Some(Code::KeyH),
+        "keyi" | "i" => Some(Code::KeyI),
+        "keyj" | "j" => Some(Code::KeyJ),
+        "keyk" | "k" => Some(Code::KeyK),
+        "keyl" | "l" => Some(Code::KeyL),
+        "keym" | "m" => Some(Code::KeyM),
+        "keyn" | "n" => Some(Code::KeyN),
+        "keyo" | "o" => Some(Code::KeyO),
+        "keyp" | "p" => Some(Code::KeyP),
+        "keyq" | "q" => Some(Code::KeyQ),
+        "keyr" | "r" => Some(Code::KeyR),
+        "keys" | "s" => Some(Code::KeyS),
+        "keyt" | "t" => Some(Code::KeyT),
+        "keyu" | "u" => Some(Code::KeyU),
+        "keyv" | "v" => Some(Code::KeyV),
+        "keyw" | "w" => Some(Code::KeyW),
+        "keyx" | "x" => Some(Code::KeyX),
+        "keyy" | "y" => Some(Code::KeyY),
+        "keyz" | "z" => Some(Code::KeyZ),
+        "digit0" | "0" => Some(Code::Digit0),
+        "digit1" | "1" => Some(Code::Digit1),
+        "digit2" | "2" => Some(Code::Digit2),
+        "digit3" | "3" => Some(Code::Digit3),
+        "digit4" | "4" => Some(Code::Digit4),
+        "digit5" | "5" => Some(Code::Digit5),
+        "digit6" | "6" => Some(Code::Digit6),
+        "digit7" | "7" => Some(Code::Digit7),
+        "digit8" | "8" => Some(Code::Digit8),
+        "digit9" | "9" => Some(Code::Digit9),
+        "space" => Some(Code::Space),
+        _ => None,
+    }
 }
 
 fn hide_auxiliary_windows(app: &tauri::AppHandle) {
@@ -363,12 +455,32 @@ pub(crate) fn toggle_quick_paste(app: &tauri::AppHandle) {
             let _ = win.hide();
         } else {
             notch::hide_notch_shelf(app);
-            let _ = win.center();
+            place_quick_paste_window(&win);
             let _ = win.show();
             let _ = win.set_focus();
             let _ = win.emit("quick-paste:open", ());
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn place_quick_paste_window(win: &tauri::WebviewWindow) {
+    let _ = win.with_webview(|webview| unsafe {
+        clipflow_place_quick_paste_near_cursor(
+            webview.ns_window(),
+            QUICK_PASTE_WIDTH,
+            QUICK_PASTE_HEIGHT,
+        );
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn place_quick_paste_window(win: &tauri::WebviewWindow) {
+    let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+        QUICK_PASTE_WIDTH,
+        QUICK_PASTE_HEIGHT,
+    )));
+    let _ = win.center();
 }
 
 fn paste_recent(app: &tauri::AppHandle, index: u8) {

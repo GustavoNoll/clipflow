@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { MoreHorizontal, Star, Trash2 } from "lucide-react";
-import { copyItemToClipboard, itemTypeLabel } from "../lib/api";
+import { MoreHorizontal, Pin, Star, Trash2 } from "lucide-react";
+import { copyItemToClipboard } from "../lib/api";
 import { ItemMetaFooter } from "./item-meta-footer";
+import { useI18n } from "../lib/i18n";
 import { isSensitiveContent, privacyPreview } from "../lib/privacy";
 import { useSettings } from "../lib/settings-context";
 import { smartActionsForItem } from "../lib/smart-actions";
@@ -27,6 +28,7 @@ export function ShelfGridCard({
   onDelete,
 }: ShelfGridCardProps) {
   const { settings } = useSettings();
+  const { t } = useI18n();
   const isLight = variant === "light";
   const isMedia = item.itemType === "image" || item.itemType === "file";
   const isColor = item.itemType === "color";
@@ -43,16 +45,16 @@ export function ShelfGridCard({
   const contextItems: ContextMenuAction[] = [
     {
       id: "paste",
-      label: isSensitiveLocked ? "Unlock & Paste" : "Paste",
+      label: isSensitiveLocked ? t("unlockPaste") : t("paste"),
       onSelect: () => onPaste(item.id),
     },
     {
       id: "copy",
-      label: isSensitiveLocked ? "Unlock & Copy" : "Copy to Clipboard",
+      label: isSensitiveLocked ? t("unlockCopy") : t("copyToClipboard"),
       onSelect: () => {
         void copyItemToClipboard(
           item.id,
-          `Copied ${itemTypeLabel(item.itemType).toLowerCase()}`,
+          t("copiedToClipboard"),
         );
       },
     },
@@ -65,12 +67,12 @@ export function ShelfGridCard({
     }))),
     {
       id: "favorite",
-      label: item.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+      label: item.isFavorite ? t("removeFavorite") : t("addFavorite"),
       onSelect: () => onFavorite(item.id),
     },
     {
       id: "delete",
-      label: "Delete",
+      label: t("delete"),
       destructive: true,
       onSelect: () => onDelete(item.id),
     },
@@ -90,8 +92,8 @@ export function ShelfGridCard({
         className={cn(
           "flex h-full flex-col overflow-hidden rounded-[16px] border transition-colors",
           isLight
-            ? "border-black/[0.06] bg-[#f5f5f7] hover:border-black/10 hover:bg-white"
-            : "border-white/[0.06] bg-[#1c1c20] hover:border-white/10 hover:bg-[#222228]",
+            ? "border-white/45 bg-white/42 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl hover:border-white/65 hover:bg-white/58"
+            : "border-white/[0.10] bg-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl hover:border-white/[0.16] hover:bg-white/[0.10]",
         )}
       >
         <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
@@ -104,11 +106,26 @@ export function ShelfGridCard({
                 ? "bg-white/80 text-zinc-600 hover:bg-white"
                 : "bg-black/50 text-white/80 hover:bg-black/70",
             )}
-            aria-label="More options"
+            aria-label={t("moreOptions")}
           >
             <MoreHorizontal size={14} />
           </button>
         </div>
+        {item.isPinned && (
+          <div
+            className={cn(
+              "absolute left-2 top-2 z-20 flex h-7 items-center gap-1 rounded-full px-2 text-[10px] font-semibold backdrop-blur-sm",
+              isLight
+                ? "bg-white/85 text-[#5b5fc7]"
+                : "bg-black/55 text-white/85",
+            )}
+          >
+            <Pin size={11} fill="currentColor" />
+            {item.pinShortcut !== null && item.pinShortcut !== undefined
+              ? `⌃⌘${item.pinShortcut}`
+              : "PIN"}
+          </div>
+        )}
         <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
@@ -122,7 +139,7 @@ export function ShelfGridCard({
                 ? "bg-white/80 text-zinc-600"
                 : "bg-black/50 text-white/80",
             )}
-            aria-label="Delete"
+            aria-label={t("delete")}
           >
             <Trash2 size={13} />
           </button>
@@ -137,7 +154,7 @@ export function ShelfGridCard({
               isLight ? "bg-white/80 text-zinc-600" : "bg-black/50 text-white/80",
               item.isFavorite && "bg-amber-500 text-white opacity-100",
             )}
-            aria-label="Favorite"
+            aria-label={item.isFavorite ? t("removeFavorite") : t("addFavorite")}
           >
             <Star size={13} fill={item.isFavorite ? "currentColor" : "none"} />
           </button>

@@ -56,6 +56,8 @@ pub struct ClipboardItem {
     pub category_id: i64,
     pub category_name: String,
     pub is_favorite: bool,
+    pub is_pinned: bool,
+    pub pin_shortcut: Option<i64>,
     pub file_name: Option<String>,
     pub mime_type: Option<String>,
     pub thumbnail: Option<String>,
@@ -72,6 +74,7 @@ pub struct SearchParams {
     pub source_app: Option<String>,
     pub item_type: Option<String>,
     pub favorites_only: Option<bool>,
+    pub pinned_only: Option<bool>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

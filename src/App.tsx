@@ -25,14 +25,17 @@ import {
   createCategory,
   deleteItem,
   deleteItems,
-  itemTypeLabel,
   listCategories,
   listItems,
   listSourceApps,
   pasteItemById,
   seedDemoData,
+  setItemsFavorite,
+  setItemsPinned,
+  setPinShortcut,
   toggleFavorite,
 } from "./lib/api";
+import { LANGUAGE_OPTIONS, translateCategoryName, useI18n, type Language } from "./lib/i18n";
 import { useSettings } from "./lib/settings-context";
 import type { Category, ClipboardItem, ItemType, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
@@ -40,7 +43,8 @@ import { cn } from "./lib/utils";
 type FilterView = "all" | "favorites" | "category" | "app" | "type";
 
 export default function App() {
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loaded } = useSettings();
+  const { t } = useI18n();
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sourceApps, setSourceApps] = useState<SourceApp[]>([]);
@@ -101,6 +105,28 @@ export default function App() {
     await deleteItems([...selected]);
     setItems((prev) => prev.filter((item) => !selected.has(item.id)));
     setSelected(new Set());
+    refreshMeta();
+  }, [selected, refreshMeta]);
+
+  const handleBatchFavorite = useCallback(async () => {
+    if (selected.size === 0) return;
+    await setItemsFavorite([...selected], true);
+    setItems((prev) =>
+      prev.map((item) =>
+        selected.has(item.id) ? { ...item, isFavorite: true } : item,
+      ),
+    );
+    refreshMeta();
+  }, [selected, refreshMeta]);
+
+  const handleBatchPin = useCallback(async () => {
+    if (selected.size === 0) return;
+    await setItemsPinned([...selected], true);
+    setItems((prev) =>
+      prev.map((item) =>
+        selected.has(item.id) ? { ...item, isPinned: true } : item,
+      ),
+    );
     refreshMeta();
   }, [selected, refreshMeta]);
 
@@ -237,10 +263,15 @@ export default function App() {
 
   const typeFilters = useMemo(
     () =>
-      (["text", "url", "code", "image", "file", "color"] as ItemType[]).map(
-        (t) => ({ id: t, label: itemTypeLabel(t) }),
-      ),
-    [],
+      ([
+        ["text", "typeText"],
+        ["url", "typeUrl"],
+        ["code", "typeCode"],
+        ["image", "typeImage"],
+        ["file", "typeFile"],
+        ["color", "typeColor"],
+      ] as const).map(([id, key]) => ({ id: id as ItemType, label: t(key) })),
+    [t],
   );
 
   async function handleFavorite(id: string) {
@@ -251,6 +282,51 @@ export default function App() {
       ),
     );
     refreshMeta();
+  }
+
+  async function handlePin(id: string, pinned: boolean) {
+    await setItemsPinned([id], pinned);
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              isPinned: pinned,
+              pinShortcut: pinned ? item.pinShortcut : null,
+            }
+          : item,
+      ),
+    );
+    refreshMeta();
+  }
+
+  async function handlePinShortcut(id: string, shortcut: number | null) {
+    await setPinShortcut(id, shortcut);
+    setItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        isPinned: item.id === id ? true : item.isPinned,
+        pinShortcut:
+          item.id === id
+            ? shortcut
+            : item.pinShortcut === shortcut
+              ? null
+              : item.pinShortcut,
+      })),
+    );
+    refreshMeta();
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   async function handleDelete(id: string) {
@@ -272,7 +348,7 @@ export default function App() {
     const item = items.find((candidate) => candidate.id === id);
     await copyItemToClipboard(
       id,
-      item ? `Copied ${itemTypeLabel(item.itemType).toLowerCase()}` : undefined,
+      item ? t("copiedToClipboard") : undefined,
     );
   }
 
@@ -283,13 +359,13 @@ export default function App() {
     });
     window.dispatchEvent(
       new CustomEvent("clipflow:clipboard-feedback", {
-        detail: `Ignoring ${appName}`,
+        detail: t("ignoringApp", { app: appName }),
       }),
     );
   }
 
   async function handleCreateCategory() {
-    const name = prompt("Category name");
+    const name = prompt(t("categoryNamePrompt"));
     if (!name?.trim()) return;
     await createCategory(name.trim());
     refreshMeta();
@@ -311,11 +387,11 @@ export default function App() {
     : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
   return (
-    <div className="flex h-full flex-col bg-[var(--color-bg)]">
+    <div className="flex h-full flex-col bg-transparent">
       <ClipboardFeedback variant="light" position="bottom" />
       <header
         data-tauri-drag-region
-        className="flex items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-5 py-3.5 pt-10"
+        className="glass-toolbar flex items-center justify-between border-b px-5 py-3.5 pt-10"
       >
         <div className="flex items-center gap-3">
           <AppLogo />
@@ -324,10 +400,12 @@ export default function App() {
               ClipFlow
             </h1>
             <p className="text-label">
-              {total.toLocaleString()} items
-              {settings.capturePaused && " · capture paused"}
+              {total.toLocaleString()} {total === 1 ? t("item") : t("items")}
+              {settings.capturePaused && ` · ${t("capturePaused")}`}
               {settings.ignoredSourceApps.length > 0 &&
-                ` · ${settings.ignoredSourceApps.length} ignored app${settings.ignoredSourceApps.length === 1 ? "" : "s"}`}
+                ` · ${settings.ignoredSourceApps.length} ${
+                  settings.ignoredSourceApps.length === 1 ? t("ignoredApp") : t("ignoredApps")
+                }`}
             </p>
           </div>
         </div>
@@ -341,26 +419,38 @@ export default function App() {
                 "bg-[var(--color-danger-subtle)] text-[var(--color-danger)]",
             )}
           >
-            {settings.capturePaused ? "Resume capture" : "Pause 15m"}
+            {settings.capturePaused ? t("resumeCapture") : t("pause15m")}
           </button>
           {selected.size > 0 && (
-            <button
-              type="button"
-              onClick={handleBatchDelete}
-              className="btn-ghost text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]"
-            >
-              <Trash2 size={15} />
-              Delete {selected.size}
-            </button>
+            <>
+              <span className="text-label px-2">
+                {t("selectedCount", { count: selected.size })}
+              </span>
+              <button type="button" onClick={handleBatchFavorite} className="btn-ghost">
+                <Heart size={15} />
+                {t("favoriteSelected")}
+              </button>
+              <button type="button" onClick={handleBatchPin} className="btn-ghost">
+                {t("pinSelected")}
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchDelete}
+                className="btn-ghost text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]"
+              >
+                <Trash2 size={15} />
+                {t("deleteCount", { count: selected.size })}
+              </button>
+            </>
           )}
           <button type="button" onClick={handleClearHistory} className="btn-ghost">
-            Clear all
+            {t("clearAll")}
           </button>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             className="btn-ghost h-9 w-9 p-0"
-            aria-label="Open settings"
+            aria-label={t("openSettings")}
           >
             <Settings size={16} />
           </button>
@@ -369,12 +459,12 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && (
-        <aside className="w-56 shrink-0 overflow-y-auto border-r border-[var(--color-border-subtle)] bg-[var(--color-sidebar)] p-3">
+        <aside className="glass-toolbar w-56 shrink-0 overflow-y-auto border-r p-3">
           <nav className="space-y-0.5">
             <SidebarButton
               active={view === "all"}
               icon={<ClipboardList size={15} />}
-              label="All history"
+              label={t("allHistory")}
               count={total}
               onClick={() => {
                 setView("all");
@@ -384,17 +474,17 @@ export default function App() {
             <SidebarButton
               active={view === "favorites"}
               icon={<Heart size={15} />}
-              label="Favorites"
+              label={t("favorites")}
               onClick={() => setView("favorites")}
             />
           </nav>
 
-          <NavSection title="Categories">
+          <NavSection title={t("categories")}>
             {categories.map((cat) => (
               <SidebarButton
                 key={cat.id}
                 active={view === "category" && categoryId === cat.id}
-                label={cat.name}
+                label={translateCategoryName(settings.language, cat.name)}
                 count={cat.itemCount}
                 onClick={() => {
                   setView("category");
@@ -408,12 +498,12 @@ export default function App() {
               className="btn-ghost mt-1 w-full justify-start px-3 py-2 text-xs"
             >
               <Plus size={14} />
-              New category
+              {t("newCategory")}
             </button>
           </NavSection>
 
           {sourceApps.length > 0 && (
-            <NavSection title="By app">
+            <NavSection title={t("byApp")}>
               {sourceApps.slice(0, 10).map((app) => (
                 <SidebarButton
                   key={app.name}
@@ -429,7 +519,7 @@ export default function App() {
             </NavSection>
           )}
 
-          <NavSection title="By type">
+          <NavSection title={t("byType")}>
             {typeFilters.map((t) => (
               <SidebarButton
                 key={t.id}
@@ -451,12 +541,11 @@ export default function App() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           {settings.capturePaused && (
-            <div className="border-b border-[var(--color-danger-subtle)] bg-[var(--color-danger-subtle)] px-5 py-2 text-[12px] font-medium text-[var(--color-danger)]">
-              Capture is paused. Existing items stay available, but new
-              clipboard changes are not saved.
+            <div className="border-b border-[var(--color-danger-subtle)] bg-[var(--color-danger-subtle)] px-5 py-2 text-[12px] font-medium text-[var(--color-danger)] backdrop-blur-md">
+              {t("pausedBanner")}
             </div>
           )}
-          <div className="border-b border-[var(--color-border-subtle)] px-5 py-3.5">
+          <div className="glass-toolbar border-b px-5 py-3.5">
             <div className="relative max-w-xl">
               <Search
                 size={16}
@@ -467,10 +556,13 @@ export default function App() {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search content, files, URLs, apps…"
+                placeholder={t("searchLibrary")}
                 className="input-field pl-9"
-                aria-label="Search clipboard library"
+                aria-label={t("searchLibraryAria")}
               />
+              <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">
+                {t("searchFilterHint")}
+              </p>
             </div>
           </div>
 
@@ -491,6 +583,9 @@ export default function App() {
                     onPaste={handlePaste}
                     onCopy={handleCopy}
                     onIgnoreApp={handleIgnoreApp}
+                    onPin={handlePin}
+                    onSetPinShortcut={handlePinShortcut}
+                    onToggleSelect={handleToggleSelect}
                   />
                 ))}
               </div>
@@ -499,13 +594,21 @@ export default function App() {
               ref={loaderRef}
               className="py-6 text-center text-sm text-[var(--color-text-muted)]"
             >
-              {items.length > 0 && loading ? "Loading more…" : hasMore ? "Scroll for more" : null}
+              {items.length > 0 && loading ? t("loadingMore") : hasMore ? t("scrollForMore") : null}
             </div>
           </div>
         </main>
       </div>
 
-      {!settings.hasCompletedOnboarding && (
+      {loaded && !settings.hasSelectedLanguage && (
+        <LanguageDialog
+          onSelect={(language) => {
+            void updateSettings({ language, hasSelectedLanguage: true });
+          }}
+        />
+      )}
+
+      {loaded && settings.hasSelectedLanguage && !settings.hasCompletedOnboarding && (
         <OnboardingDialog
           onEnableNotch={async () => {
             await updateSettings({
@@ -540,12 +643,14 @@ function OnboardingDialog({
   onAddDemo: () => Promise<void>;
   onSkip: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-6 backdrop-blur-sm">
       <div
         role="dialog"
-        aria-label="Welcome to ClipFlow"
-        className="w-full max-w-[520px] rounded-[18px] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-popover)]"
+        aria-label={t("welcomeAria")}
+        className="glass-shell w-full max-w-[520px] rounded-[18px] p-5"
       >
         <div className="mb-4 flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--color-accent)] text-white">
@@ -553,11 +658,10 @@ function OnboardingDialog({
           </div>
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text)]">
-              Use ClipFlow without breaking focus
+              {t("welcomeTitle")}
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-              Hover the notch, search recent clips, and recover screenshots with
-              local OCR.
+              {t("welcomeBody")}
             </p>
           </div>
         </div>
@@ -565,27 +669,27 @@ function OnboardingDialog({
         <div className="space-y-2.5">
           <OnboardingPoint
             icon={<MousePointer2 size={16} />}
-            title="Hover the notch"
-            description="Open the shelf over the current app instead of switching windows."
+            title={t("notchPointTitle")}
+            description={t("notchPointBody")}
           />
           <OnboardingPoint
             icon={<Search size={16} />}
-            title="Search screenshots too"
-            description="Text extracted from images is indexed locally and can be copied."
+            title={t("searchScreenshotsTitle")}
+            description={t("searchScreenshotsBody")}
           />
           <OnboardingPoint
             icon={<ShieldCheck size={16} />}
-            title="Stay local"
-            description="History, OCR, ignored apps, and sensitive-content controls stay on this Mac."
+            title={t("localPointTitle")}
+            description={t("localPointBody")}
           />
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button type="button" onClick={onEnableNotch} className="btn-primary">
-            Enable notch hover
+            {t("enableNotchHover")}
           </button>
           <button type="button" onClick={onAddDemo} className="btn-ghost border border-[var(--color-border-subtle)]">
-            Add demo clips
+            {t("addDemoClips")}
           </button>
         </div>
         <button
@@ -593,7 +697,71 @@ function OnboardingDialog({
           onClick={onSkip}
           className="btn-ghost mt-2 w-full text-[var(--color-text-muted)]"
         >
-          Skip for now
+          {t("skipForNow")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LanguageDialog({ onSelect }: { onSelect: (language: Language) => void }) {
+  const { settings, updateSettings } = useSettings();
+  const { t } = useI18n();
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>(
+    settings.language ?? "en",
+  );
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-6 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-label={t("chooseLanguageTitle")}
+        className="glass-shell w-full max-w-[460px] rounded-[18px] p-5"
+      >
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--color-accent)] text-white">
+            <Sparkles size={18} />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-[var(--color-text)]">
+              {t("chooseLanguageTitle")}
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-muted)]">
+              {t("chooseLanguageBody")}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {LANGUAGE_OPTIONS.map((language) => (
+            <button
+              key={language.value}
+              type="button"
+              onClick={() => {
+                setSelectedLanguage(language.value);
+                void updateSettings({ language: language.value });
+              }}
+              className={cn(
+                "flex w-full items-center justify-between rounded-[var(--radius-lg)] border px-3 py-3 text-left transition-colors",
+                selectedLanguage === language.value
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text)]"
+                  : "border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] hover:text-[var(--color-text)]",
+              )}
+            >
+              <span className="text-sm font-medium">{language.nativeName}</span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {language.label}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onSelect(selectedLanguage)}
+          className="btn-primary mt-4 w-full"
+        >
+          {t("continue")}
         </button>
       </div>
     </div>
@@ -610,7 +778,7 @@ function OnboardingPoint({
   description: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3">
+    <div className="panel flex gap-3 p-3">
       <div className="mt-0.5 text-[var(--color-accent)]">{icon}</div>
       <div>
         <p className="text-sm font-medium text-[var(--color-text)]">{title}</p>
@@ -623,12 +791,13 @@ function OnboardingPoint({
 }
 
 function LoadingGrid({ compact }: { compact: boolean }) {
+  const { t } = useI18n();
   const gridClass = compact
     ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
     : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
   return (
-    <div className={cn("grid gap-3", gridClass)} aria-label="Loading clipboard items">
+    <div className={cn("grid gap-3", gridClass)} aria-label={t("loadingMore")}>
       {Array.from({ length: compact ? 10 : 8 }).map((_, index) => (
         <div key={index} className="panel p-3.5">
           <div className="mb-3 flex items-center gap-2">
@@ -702,25 +871,25 @@ function NavSection({
 }
 
 function EmptyState({ capturePaused }: { capturePaused: boolean }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex h-full flex-col items-center justify-center py-20 text-center">
       <div className="panel mb-4 flex h-14 w-14 items-center justify-center">
         <FolderOpen size={24} className="text-[var(--color-accent)]" />
       </div>
       <h2 className="text-lg font-semibold text-[var(--color-text)]">
-        {capturePaused ? "Capture is paused" : "Nothing saved yet"}
+        {capturePaused ? t("emptyPausedTitle") : t("emptyTitle")}
       </h2>
       <p className="mt-2 max-w-sm text-sm text-[var(--color-text-muted)]">
-        {capturePaused
-          ? "Turn capture back on in Settings to start saving clipboard items."
-          : "Copy text, links, code, images, or files. ClipFlow saves them automatically. Press ⌃⌘V to open the shelf."}
+        {capturePaused ? t("emptyPausedBody") : t("emptyBody")}
       </p>
       <div className="mt-4 flex flex-wrap justify-center gap-2 text-[12px] text-[var(--color-text-muted)]">
         <span className="rounded-full bg-[var(--color-surface-hover)] px-2.5 py-1">
-          ⌘F or / searches
+          {t("searchHint")}
         </span>
         <span className="rounded-full bg-[var(--color-surface-hover)] px-2.5 py-1">
-          Right-click cards for actions
+          {t("actionsHint")}
         </span>
       </div>
     </div>

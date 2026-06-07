@@ -17,6 +17,8 @@ export interface ClipboardItem {
   categoryId: number;
   categoryName: string;
   isFavorite: boolean;
+  isPinned: boolean;
+  pinShortcut?: number | null;
   fileName?: string;
   mimeType?: string;
   thumbnail?: string;
@@ -31,6 +33,7 @@ export interface SearchParams {
   sourceApp?: string;
   itemType?: ItemType;
   favoritesOnly?: boolean;
+  pinnedOnly?: boolean;
   limit?: number;
   offset?: number;
 }

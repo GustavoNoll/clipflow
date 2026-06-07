@@ -50,7 +50,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       ref={menuRef}
       role="menu"
       tabIndex={-1}
-      className="fixed z-[100] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-popover)] outline-none"
+      className="glass-menu fixed z-[100] min-w-[180px] rounded-[var(--radius-md)] py-1 outline-none"
       style={{ left: x, top: y }}
       onContextMenu={(event) => event.preventDefault()}
     >

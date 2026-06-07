@@ -2,30 +2,37 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
 import { Heart, Search } from "lucide-react";
-import { AppLogo } from "./components/app-logo";
 import { AppIcon } from "./components/app-icon";
 import { ClipboardFeedback } from "./components/clipboard-feedback";
 import {
   copyItemToClipboard,
-  formatRelativeTime,
   getContextualRecent,
-  itemTypeLabel,
   listCategories,
   listItems,
 } from "./lib/api";
 import { getItemSizeLabel, getSourceAppLabel } from "./lib/item-meta";
 import { privacyPreview } from "./lib/privacy";
 import { useSettings } from "./lib/settings-context";
+import {
+  formatRelativeTimeForLanguage,
+  translateCategoryName,
+  useI18n,
+} from "./lib/i18n";
 import type { Category, ClipboardItem } from "./lib/types";
 import { cn } from "./lib/utils";
 
+const FAVORITES_CATEGORY_ID = -1;
+
 export default function QuickPaste() {
+  const { t } = useI18n();
+  const { settings } = useSettings();
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<ClipboardItem[]>([]);
   const [favorites, setFavorites] = useState<ClipboardItem[]>([]);
   const [searchResults, setSearchResults] = useState<ClipboardItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -44,6 +51,7 @@ export default function QuickPaste() {
     const unlistenOpen = listen("quick-paste:open", () => {
       setQuery("");
       setActiveCategory(undefined);
+      setSelectedIndex(0);
       refresh();
     });
     const unlistenCleared = listen("clipboard:history-cleared", () => {
@@ -81,7 +89,7 @@ export default function QuickPaste() {
             offset: 0,
           });
           setSearchResults(result.items);
-        } else if (activeCategory) {
+        } else if (activeCategory && activeCategory !== FAVORITES_CATEGORY_ID) {
           const result = await listItems({
             categoryId: activeCategory,
             limit: 20,
@@ -104,36 +112,90 @@ export default function QuickPaste() {
     );
     await copyItemToClipboard(
       id,
-      item ? `Copied ${itemTypeLabel(item.itemType).toLowerCase()}` : undefined,
+      item ? t("copiedToClipboard") : undefined,
     );
     await getCurrentWindow().hide();
   }
 
-  const displayItems = query.trim() || activeCategory ? searchResults : recent;
+  const showingFavorites = activeCategory === FAVORITES_CATEGORY_ID;
+  const displayItems = query.trim()
+    ? searchResults
+    : showingFavorites
+      ? favorites
+      : activeCategory
+        ? searchResults
+        : recent;
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query, activeCategory]);
+
+  useEffect(() => {
+    setSelectedIndex((index) =>
+      displayItems.length === 0 ? 0 : Math.min(index, displayItems.length - 1),
+    );
+  }, [displayItems.length]);
+
+  useEffect(() => {
+    function onNavigation(event: KeyboardEvent) {
+      if (displayItems.length === 0) return;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedIndex((index) => Math.min(index + 1, displayItems.length - 1));
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedIndex((index) => Math.max(index - 1, 0));
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        const item = displayItems[selectedIndex];
+        if (item) {
+          void handleSelect(item.id);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onNavigation);
+    return () => window.removeEventListener("keydown", onNavigation);
+  }, [displayItems, selectedIndex]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[22px] border border-black/[0.08] bg-[#f5f5f7] shadow-[0_24px_70px_rgba(0,0,0,0.22)]">
-      <ClipboardFeedback variant="light" position="bottom" compact />
-      <div className="border-b border-black/[0.055] bg-white/94 px-4 pb-3 pt-4">
-        <div className="flex items-center gap-3">
-          <AppLogo size="sm" />
-          <div className="quick-paste-search relative flex-1 rounded-[18px] border border-black/[0.07] bg-[#f8f8fa] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] transition-[border-color,background-color,box-shadow] duration-200 ease-out focus-within:border-[#7477dc]/55 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(91,95,199,0.10),inset_0_1px_0_rgba(255,255,255,0.95)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-white/[0.12] bg-black/48 shadow-[0_26px_70px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.06] backdrop-blur-2xl">
+      <ClipboardFeedback variant="dark" position="bottom" compact />
+      <div className="px-4 pb-2.5 pt-3.5">
+        <div className="flex items-center gap-2">
+          <div className="quick-paste-search relative flex-1 rounded-[13px] border border-white/[0.10] bg-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl transition-[border-color,background-color,box-shadow] duration-200 ease-out focus-within:border-white/[0.18] focus-within:bg-white/[0.11] focus-within:shadow-[0_0_0_3px_rgba(255,255,255,0.05)]">
             <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/42"
             />
             <input
               autoFocus
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search clipboard…"
-              className="quick-paste-search-input h-12 w-full appearance-none border-0 bg-transparent pl-11 pr-4 text-[15px] font-medium tracking-tight text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:outline-none"
+              placeholder={t("searchClipboard")}
+              className="quick-paste-search-input h-10 w-full appearance-none border-0 bg-transparent pl-9 pr-3 text-[13px] font-semibold tracking-tight text-white/86 outline-none placeholder:text-white/38 focus:outline-none"
             />
           </div>
         </div>
 
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+          <button
+            type="button"
+            onClick={() =>
+              setActiveCategory((prev) =>
+                prev === FAVORITES_CATEGORY_ID ? undefined : FAVORITES_CATEGORY_ID,
+              )
+            }
+            className={cn(
+              "shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
+              showingFavorites
+                ? "bg-white text-black"
+                : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
+            )}
+          >
+            ★
+          </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -144,11 +206,11 @@ export default function QuickPaste() {
               className={cn(
                 "shrink-0 rounded-full px-3 py-1.5 text-[12px] font-semibold tracking-tight transition-colors",
                 activeCategory === cat.id
-                  ? "bg-[var(--color-accent)] text-white shadow-[0_6px_16px_var(--color-accent-muted)]"
-                  : "bg-black/[0.035] text-[var(--color-text-secondary)] hover:bg-black/[0.06] hover:text-[var(--color-text)]",
+                  ? "bg-white text-black"
+                  : "bg-white/[0.08] text-white/66 hover:bg-white/[0.12] hover:text-white/88",
               )}
             >
-              {cat.name}
+              {translateCategoryName(settings.language, cat.name)}
               {cat.itemCount > 0 && (
                 <span className="ml-1 opacity-55">{cat.itemCount}</span>
               )}
@@ -157,71 +219,56 @@ export default function QuickPaste() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {!query && !activeCategory && favorites.length > 0 && (
-          <section className="mb-4">
-            <QuickSectionHeader icon={<Heart size={12} />} label="Favorites" />
-            <div className="rounded-[16px] border border-black/[0.05] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-              {favorites.slice(0, 4).map((item) => (
-                <QuickRow
-                  key={item.id}
-                  item={item}
-                  onSelect={handleSelect}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-1 scrollbar-thin">
         <section>
           <QuickSectionHeader
-            label={query.trim() ? "Results" : activeCategory ? "Category" : "Recent"}
-            detail={displayItems.length > 0 ? `${displayItems.length} shown` : undefined}
+            label={query.trim() ? t("results") : showingFavorites ? t("favorites") : activeCategory ? t("category") : t("recent")}
+            detail={displayItems.length > 0 ? t("shown", { count: displayItems.length }) : undefined}
           />
-          <div className="rounded-[16px] border border-black/[0.05] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-            {loading && (
-              <div className="space-y-2 p-3">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="flex items-center gap-3 rounded-[12px] px-2 py-2">
-                    <div className="h-10 w-10 animate-pulse rounded-[10px] bg-black/[0.06]" />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="h-3.5 w-2/3 animate-pulse rounded bg-black/[0.06]" />
-                      <div className="h-3 w-1/3 animate-pulse rounded bg-black/[0.05]" />
-                    </div>
+          <div>
+            {loading && displayItems.length === 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="h-[106px] animate-pulse rounded-[11px] border border-white/[0.09] bg-white/[0.08] backdrop-blur-xl">
                   </div>
                 ))}
               </div>
             )}
             {!loading && displayItems.length === 0 && (
               <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-[12px] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-[12px] bg-white/[0.08] text-white/60">
                   <Search size={18} />
                 </div>
-                <p className="text-sm font-medium text-[var(--color-text)]">
-                  No clips found
+                <p className="text-sm font-medium text-white/86">
+                  {t("noClipsFound")}
                 </p>
-                <p className="mt-1 max-w-[260px] text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  Copy text, links, code, images, or screenshots. OCR text is searchable too.
+                <p className="mt-1 max-w-[260px] text-xs leading-relaxed text-white/45">
+                  {t("noClipsFoundBody")}
                 </p>
               </div>
             )}
             {!loading &&
-              displayItems.map((item) => (
-                <QuickRow
-                  key={item.id}
-                  item={item}
-                  onSelect={handleSelect}
-                />
-              ))}
+              displayItems.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {displayItems.map((item, index) => (
+                    <QuickRow
+                      key={item.id}
+                      item={item}
+                      active={index === selectedIndex}
+                      onSelect={handleSelect}
+                    />
+                  ))}
+                </div>
+              )}
           </div>
         </section>
       </div>
 
-      <div className="border-t border-black/[0.06] bg-white/80 px-4 py-2.5">
-        <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-[var(--color-text-muted)]">
-          <span className="rounded-full bg-black/[0.04] px-2 py-1">⌃⌘0–9 recent</span>
-          <span className="rounded-full bg-black/[0.04] px-2 py-1">click to copy</span>
-          <span className="rounded-full bg-black/[0.04] px-2 py-1">Esc closes</span>
+      <div className="border-t border-white/[0.08] bg-white/[0.055] px-4 py-2 backdrop-blur-xl">
+        <div className="flex items-center justify-center gap-2 text-[10px] font-medium text-white/38">
+          <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("recentShortcut")}</span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("clickToCopy")}</span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-1">{t("escCloses")}</span>
         </div>
       </div>
     </div>
@@ -238,13 +285,13 @@ function QuickSectionHeader({
   detail?: string;
 }) {
   return (
-    <div className="mb-1.5 flex items-center justify-between px-1">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+    <div className="mb-2 flex items-center justify-between px-1">
+      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/45">
         {icon}
         {label}
       </h3>
       {detail && (
-        <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
+        <span className="text-[11px] font-medium text-white/38">
           {detail}
         </span>
       )}
@@ -254,46 +301,82 @@ function QuickSectionHeader({
 
 function QuickRow({
   item,
+  active,
   onSelect,
 }: {
   item: ClipboardItem;
+  active: boolean;
   onSelect: (id: string) => void;
 }) {
   const { settings } = useSettings();
   const appLabel = getSourceAppLabel(item);
   const sizeLabel = getItemSizeLabel(item);
   const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const timeLabel = formatRelativeTimeForLanguage(item.createdAt, settings.language);
+  const isImage = item.itemType === "image" && item.thumbnail;
+  const isColor = item.itemType === "color";
 
   return (
     <button
       type="button"
       onClick={() => onSelect(item.id)}
-      className="group flex w-full items-center gap-3 border-b border-black/[0.045] px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-[#f7f7fb] focus:outline-none focus-visible:bg-[var(--color-accent-subtle)]"
+      className={cn(
+        "group relative flex h-[112px] min-w-0 flex-col overflow-hidden rounded-[11px] border bg-white/[0.07] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl transition-colors hover:border-white/[0.16] hover:bg-white/[0.10] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/18",
+        active
+          ? "border-white/30 bg-white/[0.105] ring-2 ring-white/12"
+          : "border-white/[0.07]",
+      )}
     >
-      {item.itemType === "image" && item.thumbnail ? (
+      {isImage ? (
         <img
           src={item.thumbnail}
           alt=""
-          className="h-10 w-10 shrink-0 rounded-[10px] object-cover ring-1 ring-black/[0.06]"
+          className="absolute inset-0 h-full w-full object-cover opacity-88 transition-transform duration-200 group-hover:scale-[1.02]"
         />
-      ) : item.itemType === "color" ? (
+      ) : isColor ? (
         <div
-          className="h-10 w-10 shrink-0 rounded-[10px] border border-black/[0.08] shadow-inner"
+          className="absolute inset-0"
           style={{ backgroundColor: item.content.trim() }}
         />
       ) : (
-        <AppIcon appName={item.sourceApp} size="md" title={appLabel} />
+        <div className="absolute left-2 top-2">
+          <AppIcon appName={item.sourceApp} size="sm" title={appLabel} />
+        </div>
       )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-[var(--color-text)]">
+
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 flex min-h-[58px] flex-col justify-end px-2.5 pb-2 pt-7",
+          isImage || isColor
+            ? "bg-gradient-to-t from-black/82 via-black/42 to-transparent"
+            : "bg-transparent",
+        )}
+      >
+        <p
+          className={cn(
+            "line-clamp-3 break-words text-[12px] font-semibold leading-[1.28] tracking-[-0.01em]",
+            isImage || isColor ? "text-white" : "text-white/86",
+          )}
+        >
           {preview}
         </p>
-        <p className="mt-0.5 truncate text-[12px] text-[var(--color-text-muted)]">
-          {appLabel} · {itemTypeLabel(item.itemType)} · {formatRelativeTime(item.createdAt)} · {sizeLabel}
+        <p className="mt-1 truncate text-[10px] font-medium text-white/45">
+          {appLabel} · {timeLabel} · {sizeLabel}
         </p>
       </div>
+
       {item.isFavorite && (
-        <Heart size={12} className="shrink-0 fill-amber-500 text-amber-500" />
+        <Heart
+          size={13}
+          className="absolute right-2 top-2 fill-amber-400 text-amber-400 drop-shadow"
+        />
+      )}
+      {item.isPinned && (
+        <span className="absolute left-2 top-2 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white/80 backdrop-blur">
+          {item.pinShortcut !== null && item.pinShortcut !== undefined
+            ? `⌃⌘${item.pinShortcut}`
+            : "PIN"}
+        </span>
       )}
     </button>
   );

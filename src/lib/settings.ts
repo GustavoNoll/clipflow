@@ -1,4 +1,6 @@
 export interface AppSettings {
+  language: "en" | "pt" | "es";
+  hasSelectedLanguage: boolean;
   theme: "dark" | "light";
   accent: string;
   autoPaste: boolean;
@@ -13,9 +15,13 @@ export interface AppSettings {
   hideSensitiveContent: boolean;
   skipSensitiveContent: boolean;
   hasCompletedOnboarding: boolean;
+  launcherShortcut: string;
+  quickPasteShortcut: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  language: "en",
+  hasSelectedLanguage: false,
   theme: "light",
   accent: "#5b5fc7",
   autoPaste: true,
@@ -30,6 +36,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hideSensitiveContent: true,
   skipSensitiveContent: false,
   hasCompletedOnboarding: false,
+  launcherShortcut: "Control+Meta+KeyV",
+  quickPasteShortcut: "Control+Shift+Meta+KeyV",
 };
 
 export const ACCENT_PRESETS = [

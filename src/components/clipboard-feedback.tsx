@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/utils";
 
 type ClipboardFeedbackVariant = "dark" | "light";
@@ -17,6 +18,7 @@ export function ClipboardFeedback({
   position = "bottom",
   compact = false,
 }: ClipboardFeedbackProps) {
+  const { t } = useI18n();
   const [message, setMessage] = useState("");
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -30,17 +32,17 @@ export function ClipboardFeedback({
     }
 
     const unlistenNewItem = listen("clipboard:new-item", () => {
-      show("Copied to ClipFlow");
+      show(t("copiedToClipFlow"));
     });
     const unlistenCopied = listen("clipboard:item-copied", () => {
-      show("Copied to clipboard");
+      show(t("copiedToClipboard"));
     });
     const unlistenCleared = listen<number>("clipboard:history-cleared", (event) => {
-      show(event.payload > 0 ? "History cleared" : "Nothing to clear");
+      show(event.payload > 0 ? t("historyCleared") : t("nothingToClear"));
     });
     function onLocalFeedback(event: Event) {
       const detail = (event as CustomEvent<string>).detail;
-      show(detail || "Copied to clipboard");
+      show(detail || t("copiedToClipboard"));
     }
     window.addEventListener("clipflow:clipboard-feedback", onLocalFeedback);
 
@@ -51,7 +53,7 @@ export function ClipboardFeedback({
       unlistenCopied.then((fn) => fn());
       unlistenCleared.then((fn) => fn());
     };
-  }, []);
+  }, [t]);
 
   return (
     <div

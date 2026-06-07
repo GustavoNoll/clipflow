@@ -74,6 +74,18 @@ export async function toggleFavorite(id: string): Promise<boolean> {
   return invoke("toggle_favorite", { id });
 }
 
+export async function setItemsFavorite(ids: string[], favorite: boolean): Promise<number> {
+  return invoke("set_items_favorite", { ids, favorite });
+}
+
+export async function setItemsPinned(ids: string[], pinned: boolean): Promise<number> {
+  return invoke("set_items_pinned", { ids, pinned });
+}
+
+export async function setPinShortcut(id: string, shortcut: number | null): Promise<void> {
+  return invoke("set_pin_shortcut", { id, shortcut });
+}
+
 export async function setItemCategory(
   itemId: string,
   categoryId: number,

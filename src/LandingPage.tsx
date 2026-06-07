@@ -187,9 +187,9 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="landing-demo relative min-h-[440px] overflow-hidden rounded-[22px] bg-[#101014] p-4 ring-1 ring-white/10">
+        <div className="landing-demo relative min-h-[440px] overflow-hidden rounded-[22px] border border-white/[0.10] bg-white/[0.055] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
           <div className="absolute left-1/2 top-0 h-[58px] w-[210px] -translate-x-1/2 rounded-b-[30px] bg-black" />
-          <div className="relative mt-7 overflow-hidden rounded-b-[24px] bg-black p-5 pt-12">
+          <div className="relative mt-7 overflow-hidden rounded-b-[24px] border border-white/[0.08] bg-black/58 p-5 pt-12 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl">
             <div className="absolute left-4 top-3 flex items-center gap-2 text-[12px] font-medium text-white/66">
               <Command size={14} />
               Last copy
@@ -223,7 +223,7 @@ export default function LandingPage() {
               {recentClips.map((clip) => (
                 <article
                   key={`${clip.app}-${clip.title}`}
-                  className="min-h-[132px] rounded-[14px] bg-[#1d1d22] p-4 ring-1 ring-white/[0.07]"
+                  className="min-h-[132px] rounded-[14px] border border-white/[0.08] bg-white/[0.065] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl"
                 >
                   <div className="mb-6 flex items-center gap-2">
                     <AppBadge app={clip.app} />
@@ -261,7 +261,7 @@ export default function LandingPage() {
             {["Copy", "Paste", "Find"].map((action) => (
               <div
                 key={action}
-                className="rounded-[14px] bg-white/[0.06] px-4 py-3 text-center text-[13px] font-semibold text-white/62 ring-1 ring-white/[0.07]"
+                className="rounded-[14px] border border-white/[0.08] bg-white/[0.065] px-4 py-3 text-center text-[13px] font-semibold text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl"
               >
                 {action}
               </div>
@@ -271,7 +271,7 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-5 py-16 sm:px-8">
-        <div className="grid gap-8 rounded-[22px] bg-[#111116] p-5 ring-1 ring-white/[0.08] lg:grid-cols-[0.92fr_1.08fr] lg:p-8">
+        <div className="grid gap-8 rounded-[22px] border border-white/[0.09] bg-white/[0.055] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl lg:grid-cols-[0.92fr_1.08fr] lg:p-8">
           <div className="flex flex-col justify-between">
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/[0.07] px-3 py-1.5 text-[13px] font-semibold text-white/62">
@@ -319,7 +319,7 @@ export default function LandingPage() {
           {features.map((feature) => (
             <article
               key={feature.title}
-              className="rounded-[16px] bg-white/[0.055] p-5 ring-1 ring-white/[0.08]"
+              className="rounded-[16px] border border-white/[0.08] bg-white/[0.06] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl"
             >
               <feature.icon size={20} className="text-[#8f93ff]" />
               <h3 className="mt-5 text-[18px] font-semibold tracking-tight">
@@ -337,7 +337,7 @@ export default function LandingPage() {
         id="privacy"
         className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-16 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center"
       >
-        <div className="rounded-[20px] bg-[#dfe1ff] p-6 text-[#111114]">
+        <div className="rounded-[20px] border border-white/45 bg-white/70 p-6 text-[#111114] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl">
           <div className="mb-10 flex items-center gap-3">
             <Lock size={20} />
             <span className="text-[14px] font-semibold">Local-first controls</span>
@@ -349,7 +349,7 @@ export default function LandingPage() {
               "Hide sensitive previews",
               "Reveal private clips deliberately",
             ].map((item) => (
-              <div key={item} className="flex items-center gap-3 rounded-[12px] bg-white/70 p-3">
+              <div key={item} className="flex items-center gap-3 rounded-[12px] border border-white/45 bg-white/58 p-3 backdrop-blur-xl">
                 <Check size={17} />
                 <span className="text-[14px] font-semibold">{item}</span>
               </div>
@@ -370,7 +370,7 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-5 py-16 sm:px-8">
-        <div className="grid overflow-hidden rounded-[22px] bg-white text-[#111114] lg:grid-cols-[1fr_0.95fr]">
+        <div className="grid overflow-hidden rounded-[22px] border border-white/45 bg-white/76 text-[#111114] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl lg:grid-cols-[1fr_0.95fr]">
           <div className="p-6 sm:p-10">
             <BadgeCheck size={24} className="text-[#5b5fc7]" />
             <h2 className="mt-6 max-w-2xl text-balance text-[clamp(2rem,4vw,3.8rem)] font-semibold leading-tight tracking-[-0.035em]">
@@ -381,7 +381,7 @@ export default function LandingPage() {
               subscription suite. It solves one daily workflow and stays light.
             </p>
           </div>
-          <div className="bg-[#f0f0f7] p-6 sm:p-10">
+          <div className="bg-white/38 p-6 backdrop-blur-xl sm:p-10">
             <ul className="space-y-3">
               {comparisons.map((item) => (
                 <li key={item} className="flex items-center gap-3 text-[15px] font-semibold text-[#282832]">
@@ -407,7 +407,7 @@ export default function LandingPage() {
             upgrade for Mac users who copy all day.
           </p>
         </div>
-        <div className="rounded-[20px] bg-white p-6 text-[#111114] sm:p-8">
+        <div className="rounded-[20px] border border-white/45 bg-white/76 p-6 text-[#111114] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[14px] font-semibold text-[#5b5fc7]">
@@ -457,7 +457,7 @@ export default function LandingPage() {
         <h2 className="text-center text-[clamp(2rem,4vw,3.3rem)] font-semibold tracking-[-0.03em]">
           Questions before buying
         </h2>
-        <div className="mt-8 divide-y divide-white/10 rounded-[18px] bg-white/[0.055] ring-1 ring-white/[0.08]">
+        <div className="mt-8 divide-y divide-white/10 rounded-[18px] border border-white/[0.08] bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
           {faqs.map((faq) => (
             <details key={faq.question} className="group p-5 open:bg-white/[0.03]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[16px] font-semibold">
@@ -512,7 +512,7 @@ export function PricingPage() {
       description="ClipFlow is sold as a one-time lifetime license for macOS."
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
-        <section className="rounded-[18px] bg-white p-6 text-[#111114]">
+        <section className="rounded-[18px] border border-white/45 bg-white/76 p-6 text-[#111114] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-2xl">
           <p className="text-[14px] font-semibold text-[#5b5fc7]">
             Launch lifetime license
           </p>
@@ -536,7 +536,7 @@ export function PricingPage() {
             <ArrowRight size={17} />
           </a>
         </section>
-        <section className="rounded-[18px] bg-white/[0.06] p-6 ring-1 ring-white/[0.08]">
+        <section className="rounded-[18px] border border-white/[0.08] bg-white/[0.06] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
           <h2 className="text-xl font-semibold">Included</h2>
           <ul className="mt-5 space-y-3 text-[15px] text-white/64">
             {[
@@ -723,7 +723,7 @@ function PolicySection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[16px] bg-white/[0.055] p-5 ring-1 ring-white/[0.08]">
+    <section className="rounded-[16px] border border-white/[0.08] bg-white/[0.06] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
       <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
       <p className="mt-3 max-w-3xl text-[15px] leading-7 text-white/62">
         {children}
@@ -809,7 +809,7 @@ function ScreenshotPreview() {
 
 function UsageClip() {
   return (
-    <div className="usage-clip relative overflow-hidden rounded-[18px] bg-[#050506] p-2 ring-1 ring-white/10">
+    <div className="usage-clip relative overflow-hidden rounded-[18px] border border-white/[0.10] bg-white/[0.055] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
       <img
         src="/assets/clipflow-notch-demo.gif"
         alt="ClipFlow notch hover showing recent clipboard items on macOS"

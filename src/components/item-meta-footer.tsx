@@ -1,6 +1,7 @@
 import { AppIcon } from "./app-icon";
-import { formatRelativeTime } from "../lib/api";
+import { formatRelativeTimeForLanguage } from "../lib/i18n";
 import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
+import { useSettings } from "../lib/settings-context";
 import type { ClipboardItem } from "../lib/types";
 import { cn } from "../lib/utils";
 
@@ -18,10 +19,11 @@ export function ItemMetaFooter({
   compact,
   variant = "dark",
 }: ItemMetaFooterProps) {
+  const { settings } = useSettings();
   const isLight = variant === "light";
   const appLabel = getSourceAppLabel(item);
   const sizeLabel = getItemSizeLabel(item);
-  const timeLabel = formatRelativeTime(item.createdAt);
+  const timeLabel = formatRelativeTimeForLanguage(item.createdAt, settings.language);
 
   return (
     <footer

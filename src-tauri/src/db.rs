@@ -89,8 +89,32 @@ impl Database {
             "#,
         )?;
 
+        self.ensure_item_column("is_pinned", "INTEGER NOT NULL DEFAULT 0")?;
+        self.ensure_item_column("pin_shortcut", "INTEGER")?;
+        self.conn.execute_batch(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_items_pinned ON clipboard_items(is_pinned);
+            CREATE INDEX IF NOT EXISTS idx_items_pin_shortcut ON clipboard_items(pin_shortcut);
+            "#,
+        )?;
         self.seed_default_categories()?;
         self.ensure_fts_triggers()?;
+        Ok(())
+    }
+
+    fn ensure_item_column(&self, name: &str, definition: &str) -> Result<(), DbError> {
+        let columns = self
+            .conn
+            .prepare("PRAGMA table_info(clipboard_items)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !columns.iter().any(|column| column == name) {
+            self.conn.execute_batch(&format!(
+                "ALTER TABLE clipboard_items ADD COLUMN {name} {definition};"
+            ))?;
+        }
+
         Ok(())
     }
 
@@ -237,29 +261,21 @@ impl Database {
     pub fn list_items(&self, params: &SearchParams) -> Result<PaginatedItems, DbError> {
         let limit = params.limit.unwrap_or(50).min(200);
         let offset = params.offset.unwrap_or(0);
-        let query = params.query.as_deref().unwrap_or("").trim();
+        let parsed_query = ParsedSearchQuery::from(params.query.as_deref().unwrap_or(""));
+        let query = parsed_query.text.as_str();
 
         if !query.is_empty() {
-            return self.search_fts(params, query, limit, offset);
+            return self.search_fts(params, &parsed_query, limit, offset);
         }
 
         let mut conditions = vec!["1=1".to_string()];
         let mut sql_params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
 
+        apply_filters(params, &parsed_query, &mut conditions, &mut sql_params);
+
         if let Some(cat) = params.category_id {
             conditions.push(format!("ci.category_id = ?{}", sql_params.len() + 1));
             sql_params.push(Box::new(cat));
-        }
-        if let Some(app) = &params.source_app {
-            conditions.push(format!("ci.source_app = ?{}", sql_params.len() + 1));
-            sql_params.push(Box::new(app.clone()));
-        }
-        if let Some(t) = &params.item_type {
-            conditions.push(format!("ci.item_type = ?{}", sql_params.len() + 1));
-            sql_params.push(Box::new(t.clone()));
-        }
-        if params.favorites_only.unwrap_or(false) {
-            conditions.push("ci.is_favorite = 1".to_string());
         }
 
         let where_clause = conditions.join(" AND ");
@@ -272,11 +288,11 @@ impl Database {
 
         let list_sql = format!(
             r#"SELECT ci.id, ci.content, ci.item_type, ci.source_app, ci.category_id,
-                      c.name, ci.is_favorite, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
+                      c.name, ci.is_favorite, ci.is_pinned, ci.pin_shortcut, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
                FROM clipboard_items ci
                JOIN categories c ON c.id = ci.category_id
                WHERE {where_clause}
-               ORDER BY ci.created_at DESC
+               ORDER BY ci.is_pinned DESC, ci.created_at DESC
                LIMIT ?{} OFFSET ?{}"#,
             sql_params.len() + 1,
             sql_params.len() + 2
@@ -300,11 +316,12 @@ impl Database {
     fn search_fts(
         &self,
         params: &SearchParams,
-        query: &str,
+        parsed_query: &ParsedSearchQuery,
         limit: i64,
         offset: i64,
     ) -> Result<PaginatedItems, DbError> {
-        let fts_query = query
+        let fts_query = parsed_query
+            .text
             .split_whitespace()
             .map(|t| format!("\"{t}\"*"))
             .collect::<Vec<_>>()
@@ -313,20 +330,11 @@ impl Database {
         let mut conditions = vec!["clipboard_items_fts MATCH ?1".to_string()];
         let mut sql_params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(fts_query)];
 
+        apply_filters(params, parsed_query, &mut conditions, &mut sql_params);
+
         if let Some(cat) = params.category_id {
             conditions.push(format!("ci.category_id = ?{}", sql_params.len() + 1));
             sql_params.push(Box::new(cat));
-        }
-        if let Some(app) = &params.source_app {
-            conditions.push(format!("ci.source_app = ?{}", sql_params.len() + 1));
-            sql_params.push(Box::new(app.clone()));
-        }
-        if let Some(t) = &params.item_type {
-            conditions.push(format!("ci.item_type = ?{}", sql_params.len() + 1));
-            sql_params.push(Box::new(t.clone()));
-        }
-        if params.favorites_only.unwrap_or(false) {
-            conditions.push("ci.is_favorite = 1".to_string());
         }
 
         let where_clause = conditions.join(" AND ");
@@ -344,12 +352,12 @@ impl Database {
 
         let list_sql = format!(
             r#"SELECT ci.id, ci.content, ci.item_type, ci.source_app, ci.category_id,
-                      c.name, ci.is_favorite, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
+                      c.name, ci.is_favorite, ci.is_pinned, ci.pin_shortcut, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
                FROM clipboard_items ci
                JOIN categories c ON c.id = ci.category_id
                JOIN clipboard_items_fts fts ON fts.rowid = ci.rowid
                WHERE {where_clause}
-               ORDER BY rank, ci.created_at DESC
+               ORDER BY ci.is_pinned DESC, rank, ci.created_at DESC
                LIMIT ?{} OFFSET ?{}"#,
             sql_params.len() + 1,
             sql_params.len() + 2
@@ -377,6 +385,7 @@ impl Database {
             source_app: None,
             item_type: None,
             favorites_only: None,
+            pinned_only: None,
             limit: Some(limit),
             offset: Some(0),
         })?;
@@ -386,7 +395,7 @@ impl Database {
     pub fn get_item(&self, id: &str) -> Result<ClipboardItem, DbError> {
         let mut stmt = self.conn.prepare(
             r#"SELECT ci.id, ci.content, ci.item_type, ci.source_app, ci.category_id,
-                      c.name, ci.is_favorite, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
+                      c.name, ci.is_favorite, ci.is_pinned, ci.pin_shortcut, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
                FROM clipboard_items ci
                JOIN categories c ON c.id = ci.category_id
                WHERE ci.id = ?1"#,
@@ -435,6 +444,81 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(fav == 1)
+    }
+
+    pub fn set_items_favorite(&self, ids: &[String], favorite: bool) -> Result<i64, DbError> {
+        self.update_bool_for_items(ids, "is_favorite", favorite)
+    }
+
+    pub fn set_items_pinned(&self, ids: &[String], pinned: bool) -> Result<i64, DbError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "UPDATE clipboard_items SET is_pinned = {}, pin_shortcut = CASE WHEN {} = 0 THEN NULL ELSE pin_shortcut END, updated_at = ? WHERE id IN ({placeholders})",
+            if pinned { 1 } else { 0 },
+            if pinned { 1 } else { 0 }
+        );
+        self.execute_item_update(&sql, ids)
+    }
+
+    fn update_bool_for_items(
+        &self,
+        ids: &[String],
+        column: &str,
+        enabled: bool,
+    ) -> Result<i64, DbError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "UPDATE clipboard_items SET {column} = {}, updated_at = ? WHERE id IN ({placeholders})",
+            if enabled { 1 } else { 0 }
+        );
+        self.execute_item_update(&sql, ids)
+    }
+
+    fn execute_item_update(&self, sql: &str, ids: &[String]) -> Result<i64, DbError> {
+        let mut values: Vec<Box<dyn rusqlite::ToSql>> =
+            vec![Box::new(chrono::Utc::now().timestamp())];
+        values.extend(
+            ids.iter()
+                .cloned()
+                .map(|id| Box::new(id) as Box<dyn rusqlite::ToSql>),
+        );
+        let refs: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+        Ok(self.conn.prepare(sql)?.execute(refs.as_slice())? as i64)
+    }
+
+    pub fn set_pin_shortcut(&self, id: &str, shortcut: Option<i64>) -> Result<(), DbError> {
+        if let Some(slot) = shortcut {
+            self.conn.execute(
+                "UPDATE clipboard_items SET pin_shortcut = NULL WHERE pin_shortcut = ?1 AND id != ?2",
+                params![slot, id],
+            )?;
+        }
+        self.conn.execute(
+            "UPDATE clipboard_items SET is_pinned = 1, pin_shortcut = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, shortcut, chrono::Utc::now().timestamp()],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_pinned_by_shortcut(&self, shortcut: i64) -> Result<Option<ClipboardItem>, DbError> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT ci.id, ci.content, ci.item_type, ci.source_app, ci.category_id,
+                      c.name, ci.is_favorite, ci.is_pinned, ci.pin_shortcut, ci.file_name, ci.mime_type, ci.raw_data, ci.created_at
+               FROM clipboard_items ci
+               JOIN categories c ON c.id = ci.category_id
+               WHERE ci.is_pinned = 1 AND ci.pin_shortcut = ?1
+               ORDER BY ci.created_at DESC
+               LIMIT 1"#,
+        )?;
+        stmt.query_row(params![shortcut], map_item_row)
+            .optional()
+            .map_err(Into::into)
     }
 
     pub fn set_category(&self, item_id: &str, category_id: i64) -> Result<(), DbError> {
@@ -552,8 +636,8 @@ impl Database {
 fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItem> {
     let content: String = row.get(1)?;
     let item_type: String = row.get(2)?;
-    let raw_data: Option<Vec<u8>> = row.get(9)?;
-    let created_at_ts: i64 = row.get(10)?;
+    let raw_data: Option<Vec<u8>> = row.get(11)?;
+    let created_at_ts: i64 = row.get(12)?;
     let created_at = chrono::DateTime::<chrono::Utc>::from_timestamp(created_at_ts, 0)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default();
@@ -582,8 +666,10 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItem> {
         category_id: row.get(4)?,
         category_name: row.get(5)?,
         is_favorite: row.get::<_, i64>(6)? == 1,
-        file_name: row.get(7)?,
-        mime_type: row.get(8)?,
+        is_pinned: row.get::<_, i64>(7)? == 1,
+        pin_shortcut: row.get(8)?,
+        file_name: row.get(9)?,
+        mime_type: row.get(10)?,
         thumbnail,
         content_size,
         created_at,
@@ -602,6 +688,74 @@ fn compute_content_size(item_type: &str, content: &str, raw_data: &Option<Vec<u8
         }
     }
     content.as_bytes().len() as i64
+}
+
+#[derive(Default)]
+struct ParsedSearchQuery {
+    text: String,
+    app: Option<String>,
+    item_type: Option<String>,
+    favorites_only: bool,
+    pinned_only: bool,
+}
+
+impl ParsedSearchQuery {
+    fn from(raw: &str) -> Self {
+        let mut parsed = Self::default();
+        let mut text = Vec::new();
+
+        for token in raw.split_whitespace() {
+            let lower = token.to_lowercase();
+            if lower == "@fav" || lower == "@favorite" || lower == "@favorites" {
+                parsed.favorites_only = true;
+            } else if lower == "@pin" || lower == "@pinned" {
+                parsed.pinned_only = true;
+            } else if let Some(value) = lower.strip_prefix("@type:") {
+                if !value.is_empty() {
+                    parsed.item_type = Some(value.to_string());
+                }
+            } else if let Some(value) = token.strip_prefix("@app:") {
+                if !value.is_empty() {
+                    parsed.app = Some(value.to_string());
+                }
+            } else {
+                text.push(token);
+            }
+        }
+
+        parsed.text = text.join(" ");
+        parsed
+    }
+}
+
+fn apply_filters(
+    params: &SearchParams,
+    parsed_query: &ParsedSearchQuery,
+    conditions: &mut Vec<String>,
+    sql_params: &mut Vec<Box<dyn rusqlite::ToSql>>,
+) {
+    let source_app = parsed_query.app.as_ref().or(params.source_app.as_ref());
+    if let Some(app) = source_app {
+        conditions.push(format!(
+            "LOWER(COALESCE(ci.source_app, '')) LIKE ?{}",
+            sql_params.len() + 1
+        ));
+        sql_params.push(Box::new(format!("%{}%", app.to_lowercase())));
+    }
+
+    let item_type = parsed_query.item_type.as_ref().or(params.item_type.as_ref());
+    if let Some(item_type) = item_type {
+        conditions.push(format!("ci.item_type = ?{}", sql_params.len() + 1));
+        sql_params.push(Box::new(item_type.clone()));
+    }
+
+    if params.favorites_only.unwrap_or(false) || parsed_query.favorites_only {
+        conditions.push("ci.is_favorite = 1".to_string());
+    }
+
+    if params.pinned_only.unwrap_or(false) || parsed_query.pinned_only {
+        conditions.push("ci.is_pinned = 1".to_string());
+    }
 }
 
 pub fn db_path() -> PathBuf {

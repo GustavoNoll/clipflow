@@ -1,10 +1,14 @@
 import { Keyboard } from "lucide-react";
-import { getShortcuts, TRAY_HINT, type ShortcutItem } from "../lib/shortcuts";
+import { getShortcuts, getTrayHint, type ShortcutItem } from "../lib/shortcuts";
 import type { AppSettings } from "../lib/settings";
+import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/utils";
 
 interface ShortcutsReferenceProps {
-  settings: Pick<AppSettings, "defaultLauncher">;
+  settings: Pick<
+    AppSettings,
+    "defaultLauncher" | "language" | "launcherShortcut" | "quickPasteShortcut"
+  >;
   variant?: "compact" | "panel";
   className?: string;
 }
@@ -15,6 +19,8 @@ export function ShortcutsReference({
   className,
 }: ShortcutsReferenceProps) {
   const shortcuts = getShortcuts(settings);
+  const { t } = useI18n();
+  const trayHint = getTrayHint(settings.language);
 
   if (variant === "compact") {
     return (
@@ -26,14 +32,14 @@ export function ShortcutsReference({
       >
         <p className="text-section mb-2 flex items-center gap-1.5 px-0.5">
           <Keyboard size={12} />
-          Shortcuts
+          {t("shortcuts")}
         </p>
         <ul className="space-y-1.5">
           {shortcuts.map((item) => (
             <ShortcutRow key={item.keys} item={item} size="sm" />
           ))}
         </ul>
-        <p className="text-label mt-2 px-0.5 leading-snug">{TRAY_HINT}</p>
+        <p className="text-label mt-2 px-0.5 leading-snug">{trayHint}</p>
       </div>
     );
   }
@@ -43,7 +49,7 @@ export function ShortcutsReference({
       {shortcuts.map((item) => (
         <ShortcutRow key={item.keys} item={item} size="md" />
       ))}
-      <p className="text-label pt-1 leading-snug">{TRAY_HINT}</p>
+      <p className="text-label pt-1 leading-snug">{trayHint}</p>
     </div>
   );
 }

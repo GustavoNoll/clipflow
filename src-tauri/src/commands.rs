@@ -61,6 +61,10 @@ pub fn save_settings(
     #[cfg(target_os = "macos")]
     crate::macos_menu::sync_from_settings(&app, &settings);
 
+    if let Err(err) = crate::register_shortcuts(&app) {
+        eprintln!("ClipFlow: global shortcuts unavailable ({err})");
+    }
+
     let _ = app.emit("settings:changed", &settings);
     Ok(settings)
 }
@@ -202,6 +206,36 @@ pub fn toggle_favorite(state: State<'_, AppState>, id: String) -> Result<bool, S
 }
 
 #[tauri::command]
+pub fn set_items_favorite(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    favorite: bool,
+) -> Result<i64, String> {
+    let db = state.db.lock();
+    db.set_items_favorite(&ids, favorite).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_items_pinned(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    pinned: bool,
+) -> Result<i64, String> {
+    let db = state.db.lock();
+    db.set_items_pinned(&ids, pinned).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_pin_shortcut(
+    state: State<'_, AppState>,
+    id: String,
+    shortcut: Option<i64>,
+) -> Result<(), String> {
+    let db = state.db.lock();
+    db.set_pin_shortcut(&id, shortcut).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn set_item_category(
     state: State<'_, AppState>,
     item_id: String,
@@ -288,11 +322,22 @@ pub fn paste_item_by_id(state: State<'_, AppState>, id: String) -> Result<(), St
 pub fn paste_recent_by_index(state: State<'_, AppState>, index: u8) -> Result<(), String> {
     let (items, auto_paste, hide_sensitive_content) = {
         let db = state.db.lock();
-        let items = db.get_recent(10).map_err(|e| e.to_string())?;
+        let items = if let Some(item) = db
+            .get_pinned_by_shortcut(index as i64)
+            .map_err(|e| e.to_string())?
+        {
+            vec![item]
+        } else {
+            db.get_recent(10).map_err(|e| e.to_string())?
+        };
         let settings = db.get_settings().unwrap_or_default();
         (items, settings.auto_paste, settings.hide_sensitive_content)
     };
-    let idx = index as usize;
+    let idx = if items.len() == 1 && items[0].pin_shortcut == Some(index as i64) {
+        0
+    } else {
+        index as usize
+    };
     if idx >= items.len() {
         return Err("No item at this index".to_string());
     }

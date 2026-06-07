@@ -238,10 +238,13 @@ fn source_app_is_ignored(db: &Arc<Mutex<Database>>, source_app: Option<&str>) ->
         return false;
     };
     let settings = db.lock().get_settings().unwrap_or_default();
+    let source = source_app.trim().to_lowercase();
     settings
         .ignored_source_apps
         .iter()
-        .any(|name| name.eq_ignore_ascii_case(source_app))
+        .map(|name| name.trim().to_lowercase())
+        .filter(|name| !name.is_empty())
+        .any(|name| source == name || source.contains(&name))
 }
 
 fn should_skip_sensitive_content(db: &Arc<Mutex<Database>>, text: &str) -> bool {

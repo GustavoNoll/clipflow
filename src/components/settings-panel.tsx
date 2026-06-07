@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { authenticatePrivacyReveal, seedDemoData } from "../lib/api";
+import { LANGUAGE_OPTIONS, useI18n } from "../lib/i18n";
 import { ACCENT_PRESETS } from "../lib/settings";
 import { useSettings } from "../lib/settings-context";
 import { useUpdateStatus } from "../lib/update-status-context";
@@ -13,6 +14,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { t } = useI18n();
   const {
     currentVersion,
     update,
@@ -58,7 +60,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       await updateSettings({ hideSensitiveContent: false });
       window.dispatchEvent(
         new CustomEvent("clipflow:clipboard-feedback", {
-          detail: "Sensitive previews revealed",
+          detail: t("sensitivePreviewsRevealed"),
         }),
       );
     }
@@ -70,19 +72,19 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     <>
       <button
         type="button"
-        aria-label="Close settings"
-        className="fixed inset-0 z-40 bg-black/40 transition-opacity"
+        aria-label={t("closeSettings")}
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
       <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col border-l border-[var(--color-border-subtle)] bg-[var(--color-surface)] shadow-[var(--shadow-popover)]"
+        className="glass-shell fixed right-0 top-0 z-50 flex h-full w-[380px] flex-col rounded-l-[18px]"
         role="dialog"
-        aria-label="Settings"
+        aria-label={t("settings")}
       >
-        <header className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-5 py-4 pt-10">
+        <header className="glass-toolbar flex items-center justify-between border-b px-5 py-4 pt-10">
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text)]">
-              Settings
+              {t("settings")}
             </h2>
             <p className="text-label mt-0.5">
               ClipFlow {currentVersion ? `v${currentVersion}` : ""}
@@ -94,20 +96,35 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <Section title="Appearance">
-            <Field label="Theme">
+          <Section title={t("appearance")}>
+            <Field label={t("language")}>
+              <Segmented
+                value={settings.language}
+                options={LANGUAGE_OPTIONS.map((language) => ({
+                  value: language.value,
+                  label: language.nativeName,
+                }))}
+                onChange={(v) =>
+                  updateSettings({
+                    language: v as typeof settings.language,
+                    hasSelectedLanguage: true,
+                  })
+                }
+              />
+            </Field>
+            <Field label={t("theme")}>
               <Segmented
                 value={settings.theme}
                 options={[
-                  { value: "dark", label: "Dark" },
-                  { value: "light", label: "Light" },
+                  { value: "dark", label: t("dark") },
+                  { value: "light", label: t("light") },
                 ]}
                 onChange={(v) =>
                   updateSettings({ theme: v as "dark" | "light" })
                 }
               />
             </Field>
-            <Field label="Accent color">
+            <Field label={t("accentColor")}>
               <div className="flex flex-wrap gap-2">
                 {ACCENT_PRESETS.map((preset) => (
                   <button
@@ -129,16 +146,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </Field>
           </Section>
 
-          <Section title="Behavior">
+          <Section title={t("behavior")}>
             <ToggleRow
-              label="Auto-paste on select"
-              description="Paste automatically after choosing an item"
+              label={t("autoPaste")}
+              description={t("autoPasteDescription")}
               checked={settings.autoPaste}
               onChange={(v) => updateSettings({ autoPaste: v })}
             />
             <ToggleRow
-              label="Pause capture"
-              description="Stop saving new clipboard items"
+              label={t("pauseCapture")}
+              description={t("pauseCaptureDescription")}
               checked={settings.capturePaused}
               onChange={(v) =>
                 updateSettings({
@@ -147,7 +164,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 })
               }
             />
-            <Field label="Pause temporarily">
+            <Field label={t("pauseTemporarily")}>
               <div className="grid grid-cols-3 gap-2">
                 {[5, 15, 60].map((minutes) => (
                   <button
@@ -166,22 +183,22 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   onClick={resumeCapture}
                   className="btn-ghost mt-2 w-full text-[var(--color-success)]"
                 >
-                  Resume capture{pauseUntilLabel ? ` before ${pauseUntilLabel}` : ""}
+                  {pauseUntilLabel ? t("resumeBefore", { time: pauseUntilLabel }) : t("resumeCapture")}
                 </button>
               )}
             </Field>
             <ToggleRow
-              label="Notch shelf"
-              description="Show the interactive shelf from the MacBook notch"
+              label={t("notchShelf")}
+              description={t("notchShelfDescription")}
               checked={settings.notchHoverEnabled}
               onChange={(v) => updateSettings({ notchHoverEnabled: v })}
             />
-            <Field label="Default launcher">
+            <Field label={t("defaultLauncher")}>
               <Segmented
                 value={settings.defaultLauncher}
                 options={[
-                  { value: "notch", label: "Notch shelf" },
-                  { value: "quick-paste", label: "Quick paste" },
+                  { value: "notch", label: t("notchShelf") },
+                  { value: "quick-paste", label: t("quickPaste") },
                 ]}
                 onChange={(v) =>
                   updateSettings({
@@ -192,10 +209,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </Field>
           </Section>
 
-          <Section title="Privacy">
+          <Section title={t("privacy")}>
             <ToggleRow
-              label="Hide sensitive previews"
-              description="Mask likely passwords, API keys, and tokens in cards"
+              label={t("hideSensitivePreviews")}
+              description={t("hideSensitivePreviewsDescription")}
               checked={settings.hideSensitiveContent}
               onChange={(v) => {
                 if (v) {
@@ -205,7 +222,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 }
               }}
             />
-            <Field label="Sensitive preview access">
+            <Field label={t("sensitivePreviewAccess")}>
               <button
                 type="button"
                 onClick={() => {
@@ -214,20 +231,20 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 className="btn-ghost w-full border border-[var(--color-border-subtle)]"
               >
                 {settings.hideSensitiveContent
-                  ? "Reveal with Touch ID or password"
-                  : "Lock sensitive previews"}
+                  ? t("revealSensitive")
+                  : t("lockSensitive")}
               </button>
               <p className="text-label mt-1.5 leading-snug">
-                Revealing previews requires macOS device-owner authentication.
+                {t("revealAuthDescription")}
               </p>
             </Field>
             <ToggleRow
-              label="Never save secrets"
-              description="Skip new clipboard text that looks like passwords, tokens, or API keys"
+              label={t("neverSaveSecrets")}
+              description={t("neverSaveSecretsDescription")}
               checked={settings.skipSensitiveContent}
               onChange={(v) => updateSettings({ skipSensitiveContent: v })}
             />
-            <Field label="Ignore apps">
+            <Field label={t("ignoreApps")}>
               <textarea
                 value={settings.ignoredSourceApps.join(", ")}
                 onChange={(event) => updateIgnoredApps(event.target.value)}
@@ -235,30 +252,50 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 className="input-field min-h-20 resize-none"
               />
               <p className="text-label mt-1.5 leading-snug">
-                ClipFlow will skip new clipboard captures when the source app
-                matches one of these names.
+                {t("ignoreAppsDescription")}
               </p>
             </Field>
           </Section>
 
-          <Section title="Keyboard shortcuts">
+          <Section title={t("keyboardShortcuts")}>
+            <Field label={t("launcherShortcut")}>
+              <input
+                value={settings.launcherShortcut}
+                onChange={(event) =>
+                  updateSettings({ launcherShortcut: event.target.value })
+                }
+                className="input-field font-mono text-xs"
+              />
+            </Field>
+            <Field label={t("quickPasteShortcut")}>
+              <input
+                value={settings.quickPasteShortcut}
+                onChange={(event) =>
+                  updateSettings({ quickPasteShortcut: event.target.value })
+                }
+                className="input-field font-mono text-xs"
+              />
+              <p className="text-label mt-1.5 leading-snug">
+                {t("shortcutFormatHint")}
+              </p>
+            </Field>
             <ShortcutsReference settings={settings} variant="panel" />
           </Section>
 
-          <Section title="Library">
+          <Section title={t("library")}>
             <ToggleRow
-              label="Compact grid"
-              description="Show more items per row"
+              label={t("compactGrid")}
+              description={t("compactGridDescription")}
               checked={settings.compactGrid}
               onChange={(v) => updateSettings({ compactGrid: v })}
             />
           </Section>
 
-          <Section title="Data">
-            <Field label="Updates">
+          <Section title={t("data")}>
+            <Field label={t("updates")}>
               <div
                 className={cn(
-                  "rounded-[var(--radius-lg)] border bg-[var(--color-surface-raised)] p-3",
+                  "glass-menu rounded-[var(--radius-lg)] p-3",
                   update
                     ? "border-amber-400/40 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]"
                     : "border-[var(--color-border-subtle)]",
@@ -268,16 +305,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-[var(--color-text)]">
-                        Automatic updates
+                        {t("automaticUpdates")}
                       </p>
                       {update && (
                         <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-medium text-amber-500">
-                          Update available
+                          {t("updateAvailable")}
                         </span>
                       )}
                     </div>
                     <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                      {currentVersion ? `Current v${currentVersion}. ` : ""}
+                      {currentVersion ? t("currentVersion", { version: currentVersion }) : ""}
                       {updateStatus}
                     </p>
                     {update?.body && (
@@ -295,7 +332,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       disabled={checkingUpdate || installingUpdate}
                       className="btn-ghost border border-[var(--color-border-subtle)] disabled:opacity-50"
                     >
-                      {checkingUpdate ? "Checking…" : "Check"}
+                      {checkingUpdate ? t("checking") : t("check")}
                     </button>
                     {update && (
                       <button
@@ -306,7 +343,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                         disabled={installingUpdate}
                         className="btn-primary disabled:opacity-50"
                       >
-                        {installingUpdate ? "Installing…" : "Install"}
+                        {installingUpdate ? t("installing") : t("install")}
                       </button>
                     )}
                   </div>
@@ -321,10 +358,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 )}
               </div>
               <p className="text-label mt-1.5 leading-snug">
-                Requires a signed release JSON at the configured update endpoint.
+                {t("updateEndpointDescription")}
               </p>
             </Field>
-            <Field label="Demo content">
+            <Field label={t("demoContent")}>
               <button
                 type="button"
                 onClick={() => {
@@ -332,14 +369,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 }}
                 className="btn-ghost w-full border border-[var(--color-border-subtle)]"
               >
-                Add demo clips
+                {t("addDemoClips")}
               </button>
               <p className="text-label mt-1.5 leading-snug">
-                Adds realistic links, prompts, code, colors, and OCR-ready
-                screenshots for demos or screen recordings.
+                {t("addDemoContentDescription")}
               </p>
             </Field>
-            <Field label="History limit">
+            <Field label={t("historyLimit")}>
               <select
                 value={settings.historyLimit}
                 onChange={(e) =>
@@ -347,7 +383,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 }
                 className="input-field"
               >
-                <option value={0}>Unlimited</option>
+                <option value={0}>{t("unlimited")}</option>
                 <option value={1000}>1,000 items</option>
                 <option value={5000}>5,000 items</option>
                 <option value={10000}>10,000 items</option>
@@ -361,7 +397,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <div className="mb-3 flex items-center justify-between text-[11px] text-[var(--color-text-muted)]">
             <span>ClipFlow {currentVersion ? `v${currentVersion}` : ""}</span>
             <span className={update ? "font-medium text-amber-500" : ""}>
-              {update ? `v${update.version} available` : updateStatus}
+              {update ? t("versionAvailable", { version: update.version }) : updateStatus}
             </span>
           </div>
           <button
@@ -369,7 +405,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             onClick={() => resetSettings()}
             className="btn-ghost w-full"
           >
-            Reset to defaults
+            {t("resetDefaults")}
           </button>
         </footer>
       </aside>
