@@ -156,6 +156,7 @@ pub fn run() {
             commands::list_source_apps,
             commands::copy_item_to_clipboard,
             commands::copy_items_to_clipboard,
+            commands::export_item_for_drag,
             commands::copy_download_to_clipboard,
             commands::copy_download_paths_to_clipboard,
             commands::copy_text_to_clipboard,

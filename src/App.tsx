@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const SIDEBAR_STORAGE_KEY = "clipflow.sidebarOpen";
 import {
@@ -37,6 +37,7 @@ import {
   createCategory,
   deleteItem,
   deleteItems,
+  exportItemForDrag,
   listCategories,
   listItems,
   listRecentDownloads,
@@ -52,6 +53,7 @@ import {
 import { LANGUAGE_OPTIONS, translateCategoryName, useI18n, type Language } from "./lib/i18n";
 import { useSettings } from "./lib/settings-context";
 import { useUpdateStatus } from "./lib/update-status-context";
+import { setFileDragData } from "./lib/drag-files";
 import type { Category, ClipboardItem, ItemType, SourceApp } from "./lib/types";
 import { cn } from "./lib/utils";
 
@@ -81,6 +83,7 @@ export default function App() {
   );
   const loaderRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const dragPathsRef = useRef<Map<string, string[]>>(new Map());
 
   const refreshMeta = useCallback(async () => {
     const [cats, apps] = await Promise.all([
@@ -381,6 +384,43 @@ export default function App() {
       }
       return next;
     });
+  }
+
+  function prepareDragItem(item: ClipboardItem) {
+    if (view === "downloads" || item.id.startsWith("download:") || item.categoryId === -2) {
+      dragPathsRef.current.set(item.id, [item.content]);
+      return;
+    }
+
+    void exportItemForDrag(item.id)
+      .then((paths) => {
+        if (paths.length > 0) {
+          dragPathsRef.current.set(item.id, paths);
+        }
+      })
+      .catch(() => {
+        dragPathsRef.current.delete(item.id);
+      });
+  }
+
+  function handleDragStart(item: ClipboardItem, event: DragEvent<HTMLElement>) {
+    const paths = dragPathsRef.current.get(item.id);
+    if (!paths?.length) {
+      event.preventDefault();
+      void exportItemForDrag(item.id)
+        .then((nextPaths) => {
+          if (nextPaths.length > 0) {
+            dragPathsRef.current.set(item.id, nextPaths);
+          }
+        })
+        .catch(() => undefined);
+      return;
+    }
+    setFileDragData(event.dataTransfer, paths);
+  }
+
+  function handleDragEnd() {
+    dragPathsRef.current.clear();
   }
 
   async function handleDelete(id: string) {
@@ -705,6 +745,9 @@ export default function App() {
                     onPin={view === "downloads" ? undefined : handlePin}
                     onSetPinShortcut={view === "downloads" ? undefined : handlePinShortcut}
                     onToggleSelect={handleToggleSelect}
+                    onPrepareDrag={prepareDragItem}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
                   />
                 ))}
               </div>

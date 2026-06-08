@@ -2,16 +2,15 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
-use tauri::{Emitter, LogicalPosition, LogicalSize, Manager, Position, Size, WebviewWindow};
+use tauri::{Emitter, LogicalSize, Manager, Size, WebviewWindow};
 
 use crate::notch_layout::{self, NotchLayout};
 
-const HOVER_EXIT_CONTENT_DELAY_MS: u64 = 90;
 const COPY_FEEDBACK_MS: u64 = 1650;
 
 fn expanded_size(layout: &NotchLayout) -> (f64, f64) {
     let width = (layout.screen_width * 0.64).clamp(760.0, 980.0);
-    let content_height = (layout.screen_height * 0.30).clamp(280.0, 330.0);
+    let content_height = (layout.screen_height * 0.24).clamp(238.0, 278.0);
     (width, layout.collapsed_height + content_height)
 }
 
@@ -85,10 +84,6 @@ fn place_notch_window_native(win: &WebviewWindow, layout: &NotchLayout, width: f
     let frame_origin_y = layout.screen_frame_max_y - height;
 
     let _ = win.set_size(Size::Logical(LogicalSize::new(width, height)));
-    let _ = win.set_position(Position::Logical(LogicalPosition::new(
-        frame_origin_x,
-        layout.screen_y,
-    )));
 
     let _ = win.with_webview(move |webview| unsafe {
         clipflow_place_notch_window(
@@ -123,7 +118,8 @@ fn apply_notch_window(
 #[cfg(target_os = "macos")]
 fn cursor_inside_notch_rect(layout: &NotchLayout, width: f64, height: f64, margin: f64) -> bool {
     let frame_origin_x = layout.screen_frame_origin_x + (layout.screen_width - width) / 2.0;
-    unsafe { clipflow_cursor_inside_rect(frame_origin_x, layout.screen_y, width, height, margin) }
+    let frame_origin_y = layout.screen_frame_max_y - height;
+    unsafe { clipflow_cursor_inside_rect(frame_origin_x, frame_origin_y, width, height, margin) }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -211,32 +207,42 @@ fn apply_hover_preview(app: &tauri::AppHandle, hovered: bool) {
     if HOVER_PREVIEW.swap(hovered, Ordering::SeqCst) == hovered {
         return;
     }
+    if std::env::var_os("CLIPFLOW_DEBUG_HOVER").is_some() {
+        eprintln!("ClipFlow hover preview -> {hovered}");
+    }
 
-    let Some(win) = app.get_webview_window("notch-shelf") else {
-        return;
-    };
-
-    let layout = notch_layout::current_layout();
     if hovered {
-        apply_notch_window(&win, &layout, false, true);
-        let _ = win.emit("notch-shelf:hover-preview", true);
-    } else {
-        let _ = win.emit("notch-shelf:hover-preview", false);
         let app = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(HOVER_EXIT_CONTENT_DELAY_MS));
+        let main_app = app.clone();
+        let result = app.run_on_main_thread(move || {
+            let Some(win) = main_app.get_webview_window("notch-shelf") else {
+                if std::env::var_os("CLIPFLOW_DEBUG_HOVER").is_some() {
+                    eprintln!("ClipFlow hover preview: notch-shelf window missing");
+                }
+                return;
+            };
+            let layout = notch_layout::current_layout();
+            apply_notch_window(&win, &layout, false, true);
+            let _ = win.emit("notch-shelf:hover-preview", true);
+        });
+        if let Err(err) = result {
+            if std::env::var_os("CLIPFLOW_DEBUG_HOVER").is_some() {
+                eprintln!("ClipFlow hover preview main-thread error: {err}");
+            }
+        }
+    } else {
+        let app = app.clone();
+        let main_app = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let Some(win) = main_app.get_webview_window("notch-shelf") else {
+                return;
+            };
+            let _ = win.emit("notch-shelf:hover-preview", false);
             if HOVER_PREVIEW.load(Ordering::SeqCst) || is_shelf_expanded() {
                 return;
             }
-
-            let main_app = app.clone();
-            let _ = app.run_on_main_thread(move || {
-                let Some(win) = main_app.get_webview_window("notch-shelf") else {
-                    return;
-                };
-                let layout = notch_layout::current_layout();
-                apply_notch_window(&win, &layout, false, false);
-            });
+            let layout = notch_layout::current_layout();
+            apply_notch_window(&win, &layout, false, false);
         });
     }
 }
@@ -253,6 +259,7 @@ fn start_collapsed_hover_monitor(app: &tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut enter_ticks = 0;
         let mut leave_ticks = 0;
+        let mut last_debug_state = false;
 
         loop {
             std::thread::sleep(Duration::from_millis(50));
@@ -273,6 +280,14 @@ fn start_collapsed_hover_monitor(app: &tauri::AppHandle) {
 
             let margin = if hovered { 18.0 } else { 8.0 };
             let inside = cursor_inside_notch_rect(&layout, width, height, margin);
+            if std::env::var_os("CLIPFLOW_DEBUG_HOVER").is_some() && inside != last_debug_state {
+                eprintln!(
+                    "ClipFlow hover monitor: inside={inside} hovered={hovered} width={width:.0} height={height:.0} cg=({:.0},{:.0})",
+                    layout.screen_cg_x,
+                    layout.screen_cg_y
+                );
+                last_debug_state = inside;
+            }
             if inside && !hovered {
                 enter_ticks += 1;
                 leave_ticks = 0;

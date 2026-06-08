@@ -57,6 +57,8 @@ public func clipflow_place_notch_window(
                 isShrinking ? 1.0 : 1.0
             )
             window.animator().setFrame(frame, display: true)
+        } completionHandler: {
+            window.setFrame(frame, display: true)
         }
     } else {
         window.setFrame(frame, display: true)
@@ -83,10 +85,9 @@ public func clipflow_cursor_inside_rect(
     _ height: Double,
     _ margin: Double
 ) -> Bool {
-    let mouseLocation = CGEvent(source: nil)?.location ?? .zero
     let frame = NSRect(x: x, y: y, width: width, height: height)
         .insetBy(dx: -margin, dy: -margin)
-    return frame.contains(mouseLocation)
+    return frame.contains(NSEvent.mouseLocation)
 }
 
 @_cdecl("clipflow_place_quick_paste_near_cursor")

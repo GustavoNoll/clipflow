@@ -491,7 +491,10 @@ function QuickRow({
   const { settings } = useSettings();
   const appLabel = getSourceAppLabel(item);
   const sizeLabel = getItemSizeLabel(item);
-  const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const preview = privacyPreview(
+    item.preview,
+    settings.hideSensitiveContent && !isDownloadFileItem(item),
+  );
   const timeLabel = formatRelativeTimeForLanguage(item.createdAt, settings.language);
   const isImage = item.itemType === "image" && item.thumbnail;
   const isColor = item.itemType === "color";

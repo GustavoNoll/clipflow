@@ -18,6 +18,8 @@ pub struct NotchLayout {
     pub global_max_y: f64,
     pub screen_frame_max_y: f64,
     pub screen_frame_origin_x: f64,
+    pub screen_cg_x: f64,
+    pub screen_cg_y: f64,
 }
 
 impl Default for NotchLayout {
@@ -34,6 +36,8 @@ impl Default for NotchLayout {
             global_max_y: 982.0,
             screen_frame_max_y: 982.0,
             screen_frame_origin_x: 0.0,
+            screen_cg_x: 0.0,
+            screen_cg_y: 0.0,
         }
     }
 }

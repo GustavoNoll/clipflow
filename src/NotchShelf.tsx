@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   CircleArrowUp,
@@ -20,6 +20,7 @@ import {
   copyItemToClipboard,
   copyItemsToClipboard,
   deleteItem,
+  exportItemForDrag,
   getContextualRecent,
   itemTypeLabel,
   listCategories,
@@ -39,6 +40,7 @@ import { applySettingsToDocument, DEFAULT_SETTINGS } from "./lib/settings";
 import { useSettings } from "./lib/settings-context";
 import { translateCategoryName, useI18n } from "./lib/i18n";
 import { useUpdateStatus } from "./lib/update-status-context";
+import { setFileDragData } from "./lib/drag-files";
 import type { Category, ClipboardItem } from "./lib/types";
 import { cn } from "./lib/utils";
 
@@ -69,6 +71,7 @@ export default function NotchShelf() {
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragPathsRef = useRef<Map<string, string[]>>(new Map());
   const visibleItemsRef = useRef<ClipboardItem[]>([]);
   const shelfOpen = expanded || notchHovered;
   const shelfVisible = shelfOpen || hoverClosing;
@@ -325,14 +328,9 @@ export default function NotchShelf() {
   }
 
   function selectDownloads() {
-    setDownloadsOnly((prev) => {
-      const next = !prev;
-      if (next) {
-        setFavoritesOnly(false);
-        setActiveCategory(undefined);
-      }
-      return next;
-    });
+    setFavoritesOnly(false);
+    setActiveCategory(undefined);
+    setDownloadsOnly(true);
   }
 
   function selectCategory(id: number) {
@@ -396,6 +394,43 @@ export default function NotchShelf() {
       }
       return next;
     });
+  }
+
+  function prepareDragItem(item: ClipboardItem) {
+    if (isDownloadItem(item)) {
+      dragPathsRef.current.set(item.id, [item.content]);
+      return;
+    }
+
+    void exportItemForDrag(item.id)
+      .then((paths) => {
+        if (paths.length > 0) {
+          dragPathsRef.current.set(item.id, paths);
+        }
+      })
+      .catch(() => {
+        dragPathsRef.current.delete(item.id);
+      });
+  }
+
+  function handleDragStart(item: ClipboardItem, event: DragEvent<HTMLElement>) {
+    const paths = dragPathsRef.current.get(item.id);
+    if (!paths?.length) {
+      event.preventDefault();
+      void exportItemForDrag(item.id)
+        .then((nextPaths) => {
+          if (nextPaths.length > 0) {
+            dragPathsRef.current.set(item.id, nextPaths);
+          }
+        })
+        .catch(() => undefined);
+      return;
+    }
+    setFileDragData(event.dataTransfer, paths);
+  }
+
+  function handleDragEnd() {
+    dragPathsRef.current.clear();
   }
 
   async function handleFavorite(id: string) {
@@ -619,6 +654,9 @@ export default function NotchShelf() {
                           onFavorite={handleFavorite}
                           onDelete={handleDelete}
                           onToggleSelect={handleToggleSelect}
+                          onPrepareDrag={prepareDragItem}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
                         />
                       </div>
                     ))}

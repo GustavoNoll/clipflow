@@ -165,6 +165,10 @@ export async function copyItemsToClipboard(ids: string[], message?: string): Pro
   );
 }
 
+export async function exportItemForDrag(id: string): Promise<string[]> {
+  return invoke<string[]>("export_item_for_drag", { id });
+}
+
 export async function copyDownloadToClipboard(path: string, message?: string): Promise<void> {
   try {
     await invoke("copy_download_to_clipboard", { path });

@@ -14,6 +14,9 @@ struct NotchLayoutPayload: Codable {
     /// NSScreen.frame in AppKit coordinates (origin bottom-left).
     let screenFrameMaxY: Double
     let screenFrameOriginX: Double
+    /// CGDisplayBounds in CoreGraphics coordinates (origin top-left).
+    let screenCgX: Double
+    let screenCgY: Double
 }
 
 let screens = NSScreen.screens
@@ -21,6 +24,11 @@ let notchScreen =
     screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main ?? screens[0]
 
 let frame = notchScreen.frame
+let screenNumberKey = NSDeviceDescriptionKey("NSScreenNumber")
+let displayId =
+    notchScreen.deviceDescription[screenNumberKey] as? CGDirectDisplayID
+    ?? CGMainDisplayID()
+let cgBounds = CGDisplayBounds(displayId)
 let safeTop = notchScreen.safeAreaInsets.top
 let menuBar = NSStatusBar.system.thickness
 let effectiveTop = safeTop > 0 ? safeTop : menuBar
@@ -44,7 +52,9 @@ let payload = NotchLayoutPayload(
     collapsedHeight: Double(effectiveTop),
     globalMaxY: Double(globalMaxY),
     screenFrameMaxY: Double(frame.maxY),
-    screenFrameOriginX: Double(frame.origin.x)
+    screenFrameOriginX: Double(frame.origin.x),
+    screenCgX: Double(cgBounds.origin.x),
+    screenCgY: Double(cgBounds.origin.y)
 )
 
 let data = try! JSONEncoder().encode(payload)

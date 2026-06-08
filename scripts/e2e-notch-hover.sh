@@ -21,6 +21,7 @@ set_hover_db() {
 restart_app() {
   killall clipflow 2>/dev/null || true
   sleep 1
+  swift -e 'import CoreGraphics; CGWarpMouseCursorPosition(CGPoint(x: 40, y: 500)); CGAssociateMouseAndMouseCursorPosition(boolean_t(1))'
   open /Applications/ClipFlow.app
   sleep 4
   pgrep -x clipflow >/dev/null || fail "clipflow not running after restart"

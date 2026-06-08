@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type DragEvent, useState } from "react";
 import { AppIcon } from "./app-icon";
 import { FileIcon, isDownloadFileItem } from "./file-icon";
 import { getItemSizeLabel, getSourceAppLabel } from "../lib/item-meta";
@@ -26,6 +26,9 @@ interface ClipCardProps {
   onPin?: (id: string, pinned: boolean) => void;
   onSetPinShortcut?: (id: string, shortcut: number | null) => void;
   onToggleSelect?: (id: string) => void;
+  onPrepareDrag?: (item: ClipboardItem) => void;
+  onDragStart?: (item: ClipboardItem, event: DragEvent<HTMLElement>) => void;
+  onDragEnd?: () => void;
 }
 
 export function ClipCard({
@@ -39,6 +42,9 @@ export function ClipCard({
   onPin,
   onSetPinShortcut,
   onToggleSelect,
+  onPrepareDrag,
+  onDragStart,
+  onDragEnd,
 }: ClipCardProps) {
   const { settings } = useSettings();
   const { t } = useI18n();
@@ -48,9 +54,11 @@ export function ClipCard({
   const sizeLabel = getItemSizeLabel(item);
   const typeLabel = translateItemType(settings.language, item.itemType);
   const timeLabel = formatRelativeTimeForLanguage(item.createdAt, settings.language);
-  const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const shouldHideSensitiveContent =
+    settings.hideSensitiveContent && !isDownloadFileItem(item);
+  const preview = privacyPreview(item.preview, shouldHideSensitiveContent);
   const isSensitiveLocked =
-    settings.hideSensitiveContent && isSensitiveContent(item.preview);
+    shouldHideSensitiveContent && isSensitiveContent(item.preview);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const contextItems: ContextMenuAction[] = [
@@ -127,6 +135,10 @@ export function ClipCard({
         "group panel flex flex-col p-3.5 transition-colors hover:bg-[var(--color-surface-hover)]",
         selected && "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]",
       )}
+      draggable={Boolean(onDragStart)}
+      onMouseDown={() => onPrepareDrag?.(item)}
+      onDragStart={(event) => onDragStart?.(item, event)}
+      onDragEnd={onDragEnd}
       onClick={(event) => {
         if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
           event.preventDefault();

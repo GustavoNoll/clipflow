@@ -8,6 +8,7 @@ import { smartActionsForItem } from "../lib/smart-actions";
 import type { ClipboardItem } from "../lib/types";
 import { cn } from "../lib/utils";
 import { ContextMenu, type ContextMenuAction } from "./context-menu";
+import { isDownloadFileItem } from "./file-icon";
 
 interface ShelfGridCardProps {
   item: ClipboardItem;
@@ -19,6 +20,7 @@ interface ShelfGridCardProps {
   onFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleSelect?: (id: string) => void;
+  onPrepareDrag?: (item: ClipboardItem) => void;
   onDragStart?: (item: ClipboardItem, event: DragEvent<HTMLElement>) => void;
   onDragEnd?: () => void;
 }
@@ -33,6 +35,7 @@ export function ShelfGridCard({
   onFavorite,
   onDelete,
   onToggleSelect,
+  onPrepareDrag,
   onDragStart,
   onDragEnd,
 }: ShelfGridCardProps) {
@@ -47,9 +50,11 @@ export function ShelfGridCard({
       ? item.preview.replace(/^https?:\/\//, "").slice(0, 28)
       : undefined);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const preview = privacyPreview(item.preview, settings.hideSensitiveContent);
+  const shouldHideSensitiveContent =
+    settings.hideSensitiveContent && !isDownloadFileItem(item);
+  const preview = privacyPreview(item.preview, shouldHideSensitiveContent);
   const isSensitiveLocked =
-    settings.hideSensitiveContent && isSensitiveContent(item.preview);
+    shouldHideSensitiveContent && isSensitiveContent(item.preview);
 
   const contextItems: ContextMenuAction[] = [
     {
@@ -89,6 +94,7 @@ export function ShelfGridCard({
     <article
       className="group relative h-full cursor-pointer"
       draggable={Boolean(onDragStart)}
+      onMouseDown={() => onPrepareDrag?.(item)}
       onDragStart={(event) => onDragStart?.(item, event)}
       onDragEnd={onDragEnd}
       onClick={(event) => {

@@ -534,6 +534,31 @@ pub fn copy_items_to_clipboard(
     Ok(items.len())
 }
 
+#[tauri::command]
+pub fn export_item_for_drag(state: State<'_, AppState>, id: String) -> Result<Vec<String>, String> {
+    let (item, hide_sensitive_content) = {
+        let db = state.db.lock();
+        let item = db.get_item(&id).map_err(|e| e.to_string())?;
+        let hide_sensitive_content = db
+            .get_settings()
+            .map(|settings| settings.hide_sensitive_content)
+            .unwrap_or(true);
+        (item, hide_sensitive_content)
+    };
+
+    authorize_sensitive_item(
+        &item.content,
+        hide_sensitive_content,
+        "Export sensitive clipboard item from ClipFlow.",
+    )?;
+
+    let paths = export_item_paths_for_drag(&item)?;
+    Ok(paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect())
+}
+
 fn emit_copy_feedback(app: &tauri::AppHandle, payload: CopyFeedbackPayload) {
     crate::notch::show_copy_feedback(app);
     let _ = app.emit("clipboard:item-copied", &payload);
@@ -716,6 +741,16 @@ fn restore_bundle_to_clipboard(
         .join("\n\n");
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
     clipboard.set_text(text).map_err(|e| e.to_string())
+}
+
+fn export_item_paths_for_drag(item: &ClipboardItem) -> Result<Vec<PathBuf>, String> {
+    if ItemType::from_str(&item.item_type) == ItemType::Bundle {
+        let payload = bundle_payload(item)?;
+        return export_bundle_entries_for_file_clipboard(&payload.items);
+    }
+
+    let entry = bundle_entry_from_item(item)?;
+    export_bundle_entries_for_file_clipboard(&[entry])
 }
 
 fn bundle_payload(bundle: &ClipboardItem) -> Result<BundlePayload, String> {
